@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Référence BESS 250 kW / 500 kWh</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --fond:#FAFAF7; --encre:#1C2733; --gris:#5B6774; --trait:#D9DED6;
+    --da:#1F5FA8; --hausse:#2E7D5B; --baisse:#8A5FC8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--encre);font-family:"IBM Plex Sans",Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.45}
+  header{padding:28px 32px 12px;border-bottom:1px solid var(--trait)}
+  header h1{margin:0;font-size:22px;font-weight:600}
+  header p{margin:6px 0 0;color:var(--gris)}
+  main{max-width:1100px;margin:0 auto;padding:24px 32px 60px}
+  .barre{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+  .barre label{color:var(--gris)}
+  select{font:inherit;padding:6px 10px;border:1px solid var(--trait);border-radius:4px;background:#fff}
+  .chiffres{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:8px 0 28px}
+  .chiffre{border-left:3px solid var(--trait);padding:6px 0 6px 14px}
+  .chiffre .val{font-size:30px;font-weight:600;line-height:1.1}
+  .chiffre .lib{color:var(--gris);margin-top:4px}
+  .chiffre.optimum{border-color:var(--encre)}
+  .chiffre.da{border-color:var(--da)}
+  .chiffre.afrr{border-color:var(--hausse)}
+  section{margin-top:28px}
+  section h2{font-size:16px;font-weight:600;margin:0 0 10px}
+  .cadre{background:#fff;border:1px solid var(--trait);border-radius:6px;padding:16px}
+  canvas{width:100%!important;max-height:340px}
+  .vide{color:var(--gris);padding:24px;text-align:center}
+  footer{color:var(--gris);font-size:13px;margin-top:40px}
+  @media (max-width:700px){.chiffres{grid-template-columns:1fr}main,header{padding-left:16px;padding-right:16px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Référence BESS 250 kW / 500 kWh</h1>
+  <p>Prix publiés par RTE pour le lendemain, et revenu de référence d'une batterie 2h. Mis à jour chaque jour vers 13h.</p>
+</header>
+<main>
+  <div class="barre">
+    <label for="jour">Journée de livraison</label>
+    <select id="jour"></select>
+    <span id="maj" style="color:var(--gris)"></span>
+  </div>
+
+  <div class="chiffres">
+    <div class="chiffre optimum"><div class="val" id="v-opt">—</div><div class="lib">Optimum à information parfaite, €/MW/jour</div></div>
+    <div class="chiffre da"><div class="val" id="v-da">—</div><div class="lib">Stratégie day-ahead seul, €/MW/jour</div></div>
+    <div class="chiffre afrr"><div class="val" id="v-afrr">—</div><div class="lib">Stratégie aFRR seul, €/MW/jour</div></div>
+  </div>
+
+  <section>
+    <h2>Prix day-ahead France, €/MWh</h2>
+    <div class="cadre"><canvas id="g-da"></canvas><div class="vide" id="vide-da" hidden>Aucune donnée pour cette journée.</div></div>
+  </section>
+
+  <section>
+    <h2>Prix marginal aFRR capacité, €/MW/h</h2>
+    <div class="cadre"><div class="vide">Affiché dès que la ressource aFRR de l'API Balancing Capacity sera branchée.</div></div>
+  </section>
+
+  <footer>Source : API Wholesale Market et Balancing Capacity, data.rte-france.com. Les trois chiffres seront calculés par le script d'optimisation, prochaine étape ; en attendant ils restent vides.</footer>
+</main>
+<script>
+const sel = document.getElementById("jour");
+let graphe = null;
+
+async function charger(jour){
+  const r = await fetch(`data/da/${jour}.json`, {cache:"no-store"});
+  const vide = document.getElementById("vide-da");
+  if(!r.ok){ vide.hidden=false; if(graphe){graphe.destroy();graphe=null;} return; }
+  vide.hidden=true;
+  const pts = await r.json();
+  const labels = pts.map(p => p.debut.slice(11,16));
+  const prix = pts.map(p => p.prix);
+  const couleur = getComputedStyle(document.documentElement).getPropertyValue("--da").trim();
+  if(graphe) graphe.destroy();
+  graphe = new Chart(document.getElementById("g-da"), {
+    type:"line",
+    data:{labels, datasets:[{label:"DA", data:prix, borderColor:couleur, borderWidth:2, pointRadius:0, stepped:true}]},
+    options:{responsive:true, plugins:{legend:{display:false}},
+      scales:{x:{ticks:{maxTicksLimit:12}}, y:{title:{display:true,text:"€/MWh"}}}}
+  });
+  for(const id of ["v-opt","v-da","v-afrr"]) document.getElementById(id).textContent="—";
+}
+
+(async () => {
+  const vide = document.getElementById("vide-da");
+  try{
+    const idx = await (await fetch("data/index.json",{cache:"no-store"})).json();
+    document.getElementById("maj").textContent = idx.mis_a_jour ? "Dernière collecte : " + idx.mis_a_jour.replace("T"," ") : "";
+    for(const j of [...idx.jours].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; sel.appendChild(o); }
+    if(idx.jours.length){ sel.value = idx.jours[idx.jours.length-1]; charger(sel.value); }
+    else { vide.hidden=false; vide.textContent="Aucune collecte encore enregistrée : lance le workflow une première fois (onglet Actions du dépôt)."; }
+    sel.addEventListener("change", e => charger(e.target.value));
+  }catch(e){
+    vide.hidden=false;
+    vide.textContent="Le fichier data/index.json est introuvable.";
+  }
+})();
+</script>
+</body>
+</html>

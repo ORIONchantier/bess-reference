@@ -1,0 +1,36 @@
+name: Collecte RTE quotidienne
+
+on:
+  schedule:
+    # GitHub utilise l'heure UTC. 11:10 UTC = 13:10 Paris en été ; 12:10 UTC = 13:10 Paris en hiver.
+    # On lance les deux, plus une relance : le script est sans effet s'il a déjà tout.
+    - cron: "10 11 * * *"
+    - cron: "10 12 * * *"
+    - cron: "40 12 * * *"
+  workflow_dispatch:        # bouton "Run workflow" pour lancer à la main
+
+permissions:
+  contents: write
+
+jobs:
+  collecte:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Appel des API RTE
+        env:
+          RTE_KEY_B64: ${{ secrets.RTE_KEY_B64 }}
+          RTE_RES_AFRR_CAP: ${{ vars.RTE_RES_AFRR_CAP }}
+        run: python scripts/collecte_rte.py
+        continue-on-error: true
+      - name: Enregistrement des données dans le dépôt
+        run: |
+          git config user.name "robot-collecte"
+          git config user.email "robot@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "Collecte $(date -u +%F)"
+          git push

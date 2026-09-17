@@ -8,7 +8,7 @@ import requests
 
 TOKEN_URL = "https://digital.iservices.rte-france.com/token/oauth/"
 BASE_URL = "https://digital.iservices.rte-france.com/open_api/"
-RES_DA = "wholesale_market/v2/france_power_exchanges"          # vérifié
+RES_DA = os.environ.get("RTE_RES_DA", "wholesale_market/v3/france_power_exchanges")  # v3 : chemin à confirmer dans le guide
 RES_AFRR_CAP = os.environ.get("RTE_RES_AFRR_CAP", "")           # à coller depuis le guide RTE
 PARIS = ZoneInfo("Europe/Paris")
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,10 +29,7 @@ def get_token() -> str:
     return r.json()["access_token"]
 
 
-def call(token: str, resource: str, day: dt.date) -> dict:
-    start = dt.datetime.combine(day, dt.time(0), PARIS)
-    params = {"start_date": start.isoformat(timespec="seconds"),
-              "end_date": (start + dt.timedelta(days=1)).isoformat(timespec="seconds")}
+def call(token: str, resource: str, params: dict | None = None) -> dict:
     for attempt in range(3):
         r = requests.get(BASE_URL + resource, params=params, timeout=60,
                          headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
@@ -53,12 +50,17 @@ def save(folder: str, day: dt.date, payload: dict, points: list) -> None:
         (d / f"{day.isoformat()}.json").write_text(json.dumps(points, ensure_ascii=False))
 
 
-def parse_da(payload: dict) -> list:
-    pts = []
-    for block in payload.get("france_power_exchanges", []):
-        for v in block.get("values", []):
-            pts.append({"debut": v["start_date"], "fin": v["end_date"], "prix": v["price"]})
-    return pts
+def parse_da(payload: dict):
+    """Structure du guide v3 : france_power_exchanges[0].values[] avec start_date, end_date, value (MW), price (€/MWh).
+    Retourne (journée couverte, liste de points)."""
+    blocks = payload.get("france_power_exchanges", [])
+    if not blocks:
+        return None, []
+    b = blocks[0]
+    day = dt.datetime.fromisoformat(b["start_date"]).date()
+    pts = [{"debut": v["start_date"], "fin": v["end_date"], "prix": v["price"], "volume_mw": v.get("value")}
+           for v in b.get("values", [])]
+    return day, pts
 
 
 def rebuild_index() -> None:
@@ -68,21 +70,32 @@ def rebuild_index() -> None:
 
 
 def main() -> None:
-    day = dt.date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else dt.date.today() + dt.timedelta(days=1)
+    today = dt.datetime.now(PARIS).date()
+    attendu = today + dt.timedelta(days=1)
     token = get_token()
-    da_payload = call(token, RES_DA, day)
-    da_pts = parse_da(da_payload)
+
+    # Day-ahead : l'API v3 n'a pas de paramètre, elle renvoie J avant 13h et J+1 après 14h (guide, règle ESP-RG03).
+    da_payload = call(token, RES_DA)
+    day, da_pts = parse_da(da_payload)
+    if day is None or not da_pts:
+        print("DA : réponse vide. 500 premiers caractères :", json.dumps(da_payload)[:500])
+        sys.exit(2)
     save("da", day, da_payload, da_pts)
-    print(f"DA {day} : {len(da_pts)} pas de temps")
+    print(f"DA : journée {day}, {len(da_pts)} pas de temps (attendu {attendu})")
+
     if RES_AFRR_CAP:
-        afrr = call(token, RES_AFRR_CAP, day)
-        save("afrr_capacite", day, afrr, [])   # normalisation à écrire quand on aura un vrai retour
-        print(f"aFRR capacité {day} : brut enregistré")
+        start = dt.datetime.combine(attendu, dt.time(0), PARIS)
+        afrr = call(token, RES_AFRR_CAP, {"start_date": start.isoformat(timespec="seconds"),
+                                          "end_date": (start + dt.timedelta(days=1)).isoformat(timespec="seconds")})
+        save("afrr_capacite", attendu, afrr, [])   # normalisation à écrire quand on aura un vrai retour
+        print(f"aFRR capacité {attendu} : brut enregistré")
     else:
         print("aFRR capacité : ressource non renseignée, ignorée")
+
     rebuild_index()
-    if not da_pts:
-        sys.exit(2)   # RTE n'a pas encore publié : le workflow réessaiera
+    if day != attendu:
+        print("RTE n'a pas encore basculé sur J+1 : le workflow réessaiera plus tard")
+        sys.exit(2)
 
 
 if __name__ == "__main__":

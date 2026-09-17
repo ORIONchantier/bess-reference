@@ -3,141 +3,223 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Référence BESS 250 kW / 500 kWh</title>
+<title>BESS - suivi de valorisation</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
-    --fond:#FAFAF7; --encre:#1C2733; --gris:#5B6774; --trait:#D9DED6;
-    --da:#1F5FA8; --hausse:#2E7D5B; --baisse:#8A5FC8;
+    --fond:#0b0e14; --carte:#121826; --bord:#1f2a3a; --texte:#c9d1d9; --sourd:#7b8796;
+    --cyan:#22d3ee; --vert:#22c55e; --rouge:#ef4444; --jaune:#eab308; --violet:#a78bfa; --rose:#ec4899; --orange:#f97316;
+    --da:#22d3ee; --hausse:#22c55e; --baisse:#a78bfa;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--fond);color:var(--encre);font-family:"IBM Plex Sans",Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.45}
-  header{padding:28px 32px 12px;border-bottom:1px solid var(--trait)}
-  header h1{margin:0;font-size:22px;font-weight:600}
-  header p{margin:6px 0 0;color:var(--gris)}
-  main{max-width:1100px;margin:0 auto;padding:24px 32px 60px}
-  .barre{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
-  .barre label{color:var(--gris)}
-  select{font:inherit;padding:6px 10px;border:1px solid var(--trait);border-radius:4px;background:#fff}
-  .chiffres{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:8px 0 28px}
-  .chiffre{border-left:3px solid var(--trait);padding:6px 0 6px 14px}
-  .chiffre .val{font-size:30px;font-weight:600;line-height:1.1}
-  .chiffre .lib{color:var(--gris);margin-top:4px}
-  .chiffre.optimum{border-color:var(--encre)}
-  .chiffre.da{border-color:var(--da)}
-  .chiffre.afrr{border-color:var(--hausse)}
-  section{margin-top:28px}
-  section h2{font-size:16px;font-weight:600;margin:0 0 10px}
-  .cadre{background:#fff;border:1px solid var(--trait);border-radius:6px;padding:16px}
-  canvas{width:100%!important;max-height:340px}
-  .vide{color:var(--gris);padding:24px;text-align:center}
-  footer{color:var(--gris);font-size:13px;margin-top:40px}
-  @media (max-width:700px){.chiffres{grid-template-columns:1fr}main,header{padding-left:16px;padding-right:16px}}
+  body{margin:0;background:var(--fond);color:var(--texte);font-family:"JetBrains Mono",Consolas,Menlo,monospace;font-size:13px;line-height:1.5}
+  header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--bord)}
+  header img{height:44px;width:auto}
+  header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.02em}
+  header .sous{color:var(--sourd);font-size:12px;margin-left:auto}
+  main{padding:18px 24px 60px;max-width:1700px;margin:0 auto}
+  .bloc{background:var(--carte);border:1px solid var(--bord);border-radius:6px;padding:16px 18px;margin-bottom:16px}
+  .bloc-titre{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+  .bloc-titre h2{margin:0;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+  .bloc-titre .unite{margin-left:auto;font-size:11px;color:var(--cyan);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);padding:2px 8px;border-radius:3px}
+  label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--sourd)}
+  select{font:inherit;font-size:12px;color:var(--texte);background:#0f1522;border:1px solid var(--bord);border-radius:4px;padding:5px 10px}
+  .tuiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+  .tuile{background:var(--carte);border:1px solid var(--bord);border-top:2px solid var(--coul,var(--cyan));border-radius:6px;padding:12px 16px}
+  .tuile .lib{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--sourd)}
+  .tuile .val{font-size:24px;font-weight:700;color:var(--coul,var(--cyan));margin:4px 0 2px}
+  .tuile .sub{font-size:11px;color:var(--sourd)}
+  canvas{width:100%!important;max-height:320px}
+  .vide{color:var(--sourd);padding:36px;text-align:center}
+  .note{font-size:11px;color:var(--sourd)}
+  footer{color:var(--sourd);font-size:11px;margin-top:24px;line-height:1.6}
+  @media (max-width:700px){main,header{padding-left:12px;padding-right:12px}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Référence BESS 250 kW / 500 kWh</h1>
-  <p>Prix publiés pour le lendemain, et revenu de référence d'une batterie 2h. Mis à jour chaque jour vers 14h.</p>
+  <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
+  <h1>BESS - suivi de valorisation</h1>
+  <span class="sous" id="maj"></span>
 </header>
 <main>
-  <div class="barre">
-    <label for="jour">Journée de livraison</label>
-    <select id="jour"></select>
-    <span id="maj" style="color:var(--gris)"></span>
+
+  <div class="bloc">
+    <div class="bloc-titre">
+      <h2>Journée de livraison J+1</h2>
+      <label for="jour">Journée</label>
+      <select id="jour"></select>
+      <span class="note">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</span>
+    </div>
   </div>
 
-  <div class="chiffres">
-    <div class="chiffre optimum"><div class="val" id="v-opt">—</div><div class="lib">Optimum à information parfaite, €/MW/jour</div></div>
-    <div class="chiffre da"><div class="val" id="v-da">—</div><div class="lib">Stratégie day-ahead seul, €/MW/jour</div></div>
-    <div class="chiffre afrr"><div class="val" id="v-afrr">—</div><div class="lib">Stratégie aFRR seul, €/MW/jour</div></div>
+  <div class="tuiles">
+    <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub">€/MW/jour</div></div>
+    <div class="tuile" style="--coul:var(--cyan)"><div class="lib">Stratégie DA seul</div><div class="val" id="v-da">—</div><div class="sub">€/MW/jour</div></div>
+    <div class="tuile" style="--coul:var(--vert)"><div class="lib">Stratégie aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub">€/MW/jour</div></div>
+    <div class="tuile" style="--coul:var(--rouge)"><div class="lib">DA min</div><div class="val" id="k-da-min">—</div><div class="sub">€/MWh</div></div>
+    <div class="tuile" style="--coul:var(--jaune)"><div class="lib">DA max</div><div class="val" id="k-da-max">—</div><div class="sub">€/MWh</div></div>
+    <div class="tuile" style="--coul:var(--rose)"><div class="lib">Spread DA 2h</div><div class="val" id="k-da-spread">—</div><div class="sub">€/MWh, 2 h les plus chères moins 2 h les moins chères</div></div>
+    <div class="tuile" style="--coul:var(--violet)"><div class="lib">aFRR baisse, moyenne</div><div class="val" id="k-afrr-down">—</div><div class="sub">€/MW/h sur la journée</div></div>
+    <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR hausse, moyenne</div><div class="val" id="k-afrr-up">—</div><div class="sub">€/MW/h sur la journée</div></div>
   </div>
 
-  <section>
-    <h2>Prix day-ahead France, €/MWh</h2>
-    <div class="cadre"><canvas id="g-da"></canvas><div class="vide" id="vide-da" hidden>Aucune donnée pour cette journée.</div></div>
-  </section>
+  <div class="bloc">
+    <div class="bloc-titre"><h2>Prix day-ahead France</h2><span class="unite">€/MWh · pas 15 min</span></div>
+    <canvas id="g-da"></canvas><div class="vide" id="vide-da" hidden></div>
+  </div>
 
-  <section>
-    <h2>Prix marginal aFRR capacité, €/MW/h (appel d'offres journalier)</h2>
-    <div class="cadre"><canvas id="g-afrr"></canvas><div class="vide" id="vide-afrr" hidden>Aucune donnée aFRR pour cette journée.</div></div>
-  </section>
+  <div class="bloc">
+    <div class="bloc-titre"><h2>Prix marginal aFRR capacité, appel d'offres journalier</h2><span class="unite">€/MW/h · pas 15 min</span></div>
+    <canvas id="g-afrr"></canvas><div class="vide" id="vide-afrr" hidden></div>
+  </div>
 
-  <footer>Prix day-ahead : données EPEX SPOT SE et Nord Pool AS, propriété exclusive de ces bourses, obtenues via l'API Wholesale Market de RTE (data.rte-france.com). Usage interne Orion Energies uniquement. Prix aFRR : RTE, API Balancing Capacity. Les trois chiffres seront calculés par le script d'optimisation, prochaine étape ; en attendant ils restent vides.</footer>
+  <div class="bloc">
+    <div class="bloc-titre">
+      <h2>Activations aFRR énergie, journée passée</h2>
+      <label for="jour-energie">Journée</label>
+      <select id="jour-energie"></select>
+      <span class="unite">MW et €/MWh · pas 15 min</span>
+    </div>
+    <div class="tuiles" style="margin-bottom:12px">
+      <div class="tuile" style="--coul:var(--vert)"><div class="lib">Énergie activée à la hausse</div><div class="val" id="e-mwh-up">—</div><div class="sub">MWh pour la France, prix moyen <span id="e-pm-up">—</span> €/MWh</div></div>
+      <div class="tuile" style="--coul:var(--violet)"><div class="lib">Énergie activée à la baisse</div><div class="val" id="e-mwh-down">—</div><div class="sub">MWh pour la France, prix moyen <span id="e-pm-down">—</span> €/MWh</div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Taux d'activation hausse</div><div class="val" id="e-taux-up">—</div><div class="sub">volume activé / besoin exprimé par RTE</div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Taux d'activation baisse</div><div class="val" id="e-taux-down">—</div><div class="sub">volume activé / besoin exprimé par RTE</div></div>
+    </div>
+    <canvas id="g-vol"></canvas><div class="vide" id="vide-energie" hidden></div>
+    <div style="height:14px"></div>
+    <canvas id="g-prix-en"></canvas>
+  </div>
+
+  <footer>Prix day-ahead : données EPEX SPOT SE et Nord Pool AS, propriété exclusive de ces bourses, obtenues via l'API Wholesale Market de RTE (data.rte-france.com). Usage interne Orion Energies uniquement. aFRR : RTE, API Balancing Capacity et Balancing Energy. Les trois indicateurs de revenu seront calculés par le script d'optimisation, prochaine étape.</footer>
 </main>
+
 <script>
-const sel = document.getElementById("jour");
-let graphe = null, grapheAfrr = null;
+Chart.defaults.color = "#7b8796";
+Chart.defaults.font.family = '"JetBrains Mono", Consolas, monospace';
+Chart.defaults.font.size = 11;
+Chart.defaults.borderColor = "#1f2a3a";
+
+const sel = document.getElementById("jour"), selEn = document.getElementById("jour-energie");
+let graphe = null, grapheAfrr = null, grapheVol = null, graphePrixEn = null;
 const couleur = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmtParis = new Intl.DateTimeFormat("fr-FR", {hour:"2-digit", minute:"2-digit", timeZone:"Europe/Paris"});
+const heureParis = iso => fmtParis.format(new Date(iso));
+const parDate = (a, b) => new Date(a.debut) - new Date(b.debut);
+const somme = (arr, f) => arr.reduce((s, p) => s + (Number(f(p)) || 0), 0);
+const moy = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+const fmt = (v, d=0) => (v===null || v===undefined || isNaN(v)) ? "—" : Number(v).toLocaleString("fr-FR", {maximumFractionDigits:d});
+const txt = (id, v) => document.getElementById(id).textContent = v;
+const grille = {grid:{color:"#1a2231"}};
+const opts = (yTitre, extra={}) => ({responsive:true, plugins:{legend:{position:"bottom"}},
+  scales:{x:{...grille, ticks:{maxTicksLimit:12}}, y:{...grille, title:{display:true,text:yTitre}}}, ...extra});
+
+async function chargerDA(jour){
+  const vide = document.getElementById("vide-da");
+  if(graphe){ graphe.destroy(); graphe = null; }
+  for(const id of ["v-opt","v-da","v-afrr","k-da-min","k-da-max","k-da-spread"]) txt(id, "—");
+  const r = await fetch(`data/da/${jour}.json`, {cache:"no-store"});
+  if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée day-ahead pour cette journée."; return; }
+  vide.hidden=true;
+  const pts = (await r.json()).sort(parDate);
+  const prix = pts.map(p => Number(p.prix));
+  graphe = new Chart(document.getElementById("g-da"), {
+    type:"line",
+    data:{labels: pts.map(p => heureParis(p.debut)), datasets:[{label:"Day-ahead", data:prix, borderColor:couleur("--da"), borderWidth:1.5, pointRadius:0, stepped:true}]},
+    options: opts("€/MWh", {plugins:{legend:{display:false}}})
+  });
+  const tri = [...prix].sort((a, b) => a - b), n = Math.min(8, tri.length);   // 8 pas de 15 min = 2 h
+  txt("k-da-min", fmt(Math.min(...prix), 1)); txt("k-da-max", fmt(Math.max(...prix), 1));
+  if(n) txt("k-da-spread", fmt(moy(tri.slice(-n)) - moy(tri.slice(0, n)), 1));
+}
 
 async function chargerAfrr(jour){
   const vide = document.getElementById("vide-afrr");
   if(grapheAfrr){ grapheAfrr.destroy(); grapheAfrr = null; }
+  txt("k-afrr-up", "—"); txt("k-afrr-down", "—");
   try{
     const r = await fetch(`data/afrr_capacite/${jour}.json`, {cache:"no-store"});
-    if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée aFRR pour cette journée."; return; }
+    if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée aFRR capacité pour cette journée."; return; }
     const tous = await r.json();
     const daily = tous.filter(p => String(p.horizon).toUpperCase()==="DAILY");
     const pts = daily.length ? daily : tous;
-    const sens = [...new Set(pts.map(p => p.sens))];
-    const horizons = [...new Set(tous.map(p => p.horizon))];
-    const up = sens.find(s => /UP/i.test(s) && !/DOWN/i.test(s));
-    const down = sens.find(s => /DOWN/i.test(s) && !/UP/i.test(s));
-    const pas = [...new Set(pts.map(p => p.debut))].sort();
-    const serie = s => pas.map(d => { const p = pts.find(q => q.debut===d && q.sens===s); return p ? p.prix_eur_mw_h : null; });
+    const sens = [...new Set(pts.map(p => p.sens))], horizons = [...new Set(tous.map(p => p.horizon))];
+    const up = sens.find(s => /UP/i.test(s) && !/DOWN/i.test(s)), down = sens.find(s => /DOWN/i.test(s) && !/UP/i.test(s));
+    const pas = [...new Set(pts.map(p => p.debut))].sort((a, b) => new Date(a) - new Date(b));
+    const serie = s => pas.map(d => { const p = pts.find(q => q.debut===d && q.sens===s); return p ? Number(p.prix_eur_mw_h) : null; });
     const datasets = [];
-    if(up)   datasets.push({label:"Hausse", data:serie(up),   borderColor:couleur("--hausse"), borderWidth:2, pointRadius:0, stepped:true});
-    if(down) datasets.push({label:"Baisse", data:serie(down), borderColor:couleur("--baisse"), borderWidth:2, pointRadius:0, stepped:true});
+    if(up)   datasets.push({label:"Hausse", data:serie(up),   borderColor:couleur("--hausse"), borderWidth:1.5, borderDash:[6,3], pointRadius:0, stepped:true});
+    if(down) datasets.push({label:"Baisse", data:serie(down), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true});
     if(!pts.length || !datasets.length){
       vide.hidden=false;
       vide.textContent=`Fichier lu : ${tous.length} valeurs, sens trouvés : ${sens.join(", ")||"aucun"}, horizons : ${horizons.join(", ")||"aucun"}. Tracé impossible.`;
       return;
     }
     vide.hidden=true;
-    grapheAfrr = new Chart(document.getElementById("g-afrr"), {
-      type:"line",
-      data:{labels: pas.map(d => d.slice(11,16)), datasets},
-      options:{responsive:true, plugins:{legend:{position:"bottom"}},
-        scales:{x:{ticks:{maxTicksLimit:12}}, y:{title:{display:true,text:"€/MW/h"}}}}
-    });
-  }catch(e){
-    vide.hidden=false; vide.textContent="Erreur aFRR : " + e.message;
-  }
+    grapheAfrr = new Chart(document.getElementById("g-afrr"), {type:"line", data:{labels: pas.map(heureParis), datasets}, options: opts("€/MW/h")});
+    if(up)   txt("k-afrr-up",   fmt(moy(serie(up).filter(v => v!==null)), 1));
+    if(down) txt("k-afrr-down", fmt(moy(serie(down).filter(v => v!==null)), 1));
+  }catch(e){ vide.hidden=false; vide.textContent="Erreur aFRR : " + e.message; }
 }
 
-async function charger(jour){
-  const r = await fetch(`data/da/${jour}.json`, {cache:"no-store"});
-  const vide = document.getElementById("vide-da");
-  if(!r.ok){ vide.hidden=false; if(graphe){graphe.destroy();graphe=null;} return; }
-  vide.hidden=true;
-  const pts = await r.json();
-  const labels = pts.map(p => p.debut.slice(11,16));
-  const prix = pts.map(p => p.prix);
-  if(graphe) graphe.destroy();
-  graphe = new Chart(document.getElementById("g-da"), {
-    type:"line",
-    data:{labels, datasets:[{label:"DA", data:prix, borderColor:couleur("--da"), borderWidth:2, pointRadius:0, stepped:true}]},
-    options:{responsive:true, plugins:{legend:{display:false}},
-      scales:{x:{ticks:{maxTicksLimit:12}}, y:{title:{display:true,text:"€/MWh"}}}}
-  });
-  for(const id of ["v-opt","v-da","v-afrr"]) document.getElementById(id).textContent="—";
-  chargerAfrr(jour);
+async function chargerEnergie(jour){
+  const vide = document.getElementById("vide-energie");
+  for(const g of [grapheVol, graphePrixEn]) if(g) g.destroy();
+  grapheVol = graphePrixEn = null;
+  for(const id of ["e-mwh-up","e-mwh-down","e-pm-up","e-pm-down","e-taux-up","e-taux-down"]) txt(id, "—");
+  try{
+    const r = await fetch(`data/afrr_energie/${jour}.json`, {cache:"no-store"});
+    if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée d'activation pour cette journée."; return; }
+    const pts = (await r.json()).sort(parDate);
+    vide.hidden = true;
+    const labels = pts.map(p => heureParis(p.debut));
+    grapheVol = new Chart(document.getElementById("g-vol"), {
+      type:"bar",
+      data:{labels, datasets:[
+        {label:"Activé à la hausse (MW)", data:pts.map(p => Number(p.active_hausse_mw)), backgroundColor:couleur("--hausse")},
+        {label:"Activé à la baisse (MW)", data:pts.map(p => p.active_baisse_mw===null ? null : -Math.abs(Number(p.active_baisse_mw))), backgroundColor:couleur("--baisse")}]},
+      options: opts("MW, baisse en négatif", {scales:{x:{...grille, stacked:true, ticks:{maxTicksLimit:12}}, y:{...grille, stacked:true, title:{display:true,text:"MW, baisse en négatif"}}}})
+    });
+    graphePrixEn = new Chart(document.getElementById("g-prix-en"), {
+      type:"line",
+      data:{labels, datasets:[
+        {label:"Prix moyen pondéré hausse (€/MWh)", data:pts.map(p => Number(p.prix_hausse_eur_mwh)), borderColor:couleur("--hausse"), borderWidth:1.5, pointRadius:0, stepped:true},
+        {label:"Prix moyen pondéré baisse (€/MWh)", data:pts.map(p => Number(p.prix_baisse_eur_mwh)), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true}]},
+      options: opts("€/MWh")
+    });
+    const mwhUp = somme(pts, p => p.active_hausse_mw) / 4, mwhDown = somme(pts, p => Math.abs(p.active_baisse_mw)) / 4;
+    const pmUp = mwhUp ? somme(pts, p => Number(p.active_hausse_mw) * Number(p.prix_hausse_eur_mwh)) / 4 / mwhUp : null;
+    const pmDown = mwhDown ? somme(pts, p => Math.abs(Number(p.active_baisse_mw)) * Number(p.prix_baisse_eur_mwh)) / 4 / mwhDown : null;
+    const besoinUp = somme(pts, p => p.besoin_hausse_mw) / 4, besoinDown = somme(pts, p => Math.abs(p.besoin_baisse_mw)) / 4;
+    txt("e-mwh-up", fmt(mwhUp)); txt("e-mwh-down", fmt(mwhDown));
+    txt("e-pm-up", fmt(pmUp, 1)); txt("e-pm-down", fmt(pmDown, 1));
+    txt("e-taux-up", besoinUp ? fmt(100 * mwhUp / besoinUp, 1) + " %" : "—");
+    txt("e-taux-down", besoinDown ? fmt(100 * mwhDown / besoinDown, 1) + " %" : "—");
+  }catch(e){ vide.hidden=false; vide.textContent="Erreur activations : " + e.message; }
+}
+
+function remplir(select, jours){
+  for(const j of [...jours].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; select.appendChild(o); }
 }
 
 (async () => {
-  const vide = document.getElementById("vide-da");
   try{
     const idx = await (await fetch("data/index.json",{cache:"no-store"})).json();
-    document.getElementById("maj").textContent = idx.mis_a_jour ? "Dernière collecte : " + idx.mis_a_jour.replace("T"," ") : "";
-    for(const j of [...idx.jours].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; sel.appendChild(o); }
-    if(idx.jours.length){ sel.value = idx.jours[idx.jours.length-1]; charger(sel.value); }
-    else { vide.hidden=false; vide.textContent="Aucune collecte encore enregistrée : lance le workflow une première fois (onglet Actions du dépôt)."; }
-    sel.addEventListener("change", e => charger(e.target.value));
+    txt("maj", idx.mis_a_jour ? "dernière collecte " + idx.mis_a_jour.replace("T"," ") : "");
+    remplir(sel, idx.jours || []);
+    if((idx.jours||[]).length){ sel.value = idx.jours[idx.jours.length-1]; chargerDA(sel.value); chargerAfrr(sel.value); }
+    else { const v=document.getElementById("vide-da"); v.hidden=false; v.textContent="Aucune collecte enregistrée : lance le workflow une première fois."; }
+    sel.addEventListener("change", e => { chargerDA(e.target.value); chargerAfrr(e.target.value); });
+    const en = idx.afrr_energie || [];
+    remplir(selEn, en);
+    if(en.length){ selEn.value = en[en.length-1]; chargerEnergie(selEn.value); }
+    else { const v=document.getElementById("vide-energie"); v.hidden=false; v.textContent="Aucune journée d'activation collectée pour l'instant."; }
+    selEn.addEventListener("change", e => chargerEnergie(e.target.value));
   }catch(e){
-    vide.hidden=false;
-    vide.textContent="Le fichier data/index.json est introuvable.";
+    const v=document.getElementById("vide-da"); v.hidden=false; v.textContent="Le fichier data/index.json est introuvable.";
   }
 })();
 </script>

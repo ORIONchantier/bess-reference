@@ -8,8 +8,8 @@ import requests
 
 TOKEN_URL = "https://digital.iservices.rte-france.com/token/oauth/"
 BASE_URL = "https://digital.iservices.rte-france.com/open_api/"
-RES_DA = os.environ.get("RTE_RES_DA", "wholesale_market/v3/france_power_exchanges")  # v3 : chemin à confirmer dans le guide
-RES_AFRR_CAP = os.environ.get("RTE_RES_AFRR_CAP", "")           # à coller depuis le guide RTE
+RES_DA = os.environ.get("RTE_RES_DA") or "wholesale_market/v3/france_power_exchanges"   # chemin du guide v3
+RES_AFRR_CAP = os.environ.get("RTE_RES_AFRR_CAP") or ""          # à coller depuis le guide RTE
 PARIS = ZoneInfo("Europe/Paris")
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"

@@ -26,8 +26,6 @@ jobs:
       - name: Appel des API RTE
         env:
           RTE_KEY_B64: ${{ secrets.RTE_KEY_B64 }}
-          RTE_RES_AFRR_CAP: ${{ vars.RTE_RES_AFRR_CAP }}
-          RTE_RES_DA: ${{ vars.RTE_RES_DA }}
         run: python scripts/collecte_rte.py
         continue-on-error: true
       - name: Enregistrement des données dans le dépôt

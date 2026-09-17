@@ -61,15 +61,36 @@
   </section>
 
   <section>
-    <h2>Prix marginal aFRR capacité, €/MW/h</h2>
-    <div class="cadre"><div class="vide">Affiché dès que la ressource aFRR de l'API Balancing Capacity sera branchée.</div></div>
+    <h2>Prix marginal aFRR capacité, €/MW/h (appel d'offres journalier)</h2>
+    <div class="cadre"><canvas id="g-afrr"></canvas><div class="vide" id="vide-afrr" hidden>Aucune donnée aFRR pour cette journée.</div></div>
   </section>
 
   <footer>Prix day-ahead : données EPEX SPOT SE et Nord Pool AS, propriété exclusive de ces bourses, obtenues via l'API Wholesale Market de RTE (data.rte-france.com). Usage interne Orion Energies uniquement. Prix aFRR : RTE, API Balancing Capacity. Les trois chiffres seront calculés par le script d'optimisation, prochaine étape ; en attendant ils restent vides.</footer>
 </main>
 <script>
 const sel = document.getElementById("jour");
-let graphe = null;
+let graphe = null, grapheAfrr = null;
+const couleur = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+async function chargerAfrr(jour){
+  const r = await fetch(`data/afrr_capacite/${jour}.json`, {cache:"no-store"});
+  const vide = document.getElementById("vide-afrr");
+  if(grapheAfrr){ grapheAfrr.destroy(); grapheAfrr = null; }
+  if(!r.ok){ vide.hidden=false; return; }
+  const pts = (await r.json()).filter(p => p.horizon === "DAILY");
+  if(!pts.length){ vide.hidden=false; return; }
+  vide.hidden=true;
+  const pas = [...new Set(pts.map(p => p.debut))].sort();
+  const serie = sens => pas.map(d => { const p = pts.find(q => q.debut===d && q.sens===sens); return p ? p.prix_eur_mw_h : null; });
+  grapheAfrr = new Chart(document.getElementById("g-afrr"), {
+    type:"line",
+    data:{labels: pas.map(d => d.slice(11,16)), datasets:[
+      {label:"Hausse", data:serie("UP"), borderColor:couleur("--hausse"), borderWidth:2, pointRadius:0, stepped:true},
+      {label:"Baisse", data:serie("DOWN"), borderColor:couleur("--baisse"), borderWidth:2, pointRadius:0, stepped:true}]},
+    options:{responsive:true, plugins:{legend:{position:"bottom"}},
+      scales:{x:{ticks:{maxTicksLimit:12}}, y:{title:{display:true,text:"€/MW/h"}}}}
+  });
+}
 
 async function charger(jour){
   const r = await fetch(`data/da/${jour}.json`, {cache:"no-store"});
@@ -79,15 +100,15 @@ async function charger(jour){
   const pts = await r.json();
   const labels = pts.map(p => p.debut.slice(11,16));
   const prix = pts.map(p => p.prix);
-  const couleur = getComputedStyle(document.documentElement).getPropertyValue("--da").trim();
   if(graphe) graphe.destroy();
   graphe = new Chart(document.getElementById("g-da"), {
     type:"line",
-    data:{labels, datasets:[{label:"DA", data:prix, borderColor:couleur, borderWidth:2, pointRadius:0, stepped:true}]},
+    data:{labels, datasets:[{label:"DA", data:prix, borderColor:couleur("--da"), borderWidth:2, pointRadius:0, stepped:true}]},
     options:{responsive:true, plugins:{legend:{display:false}},
       scales:{x:{ticks:{maxTicksLimit:12}}, y:{title:{display:true,text:"€/MWh"}}}}
   });
   for(const id of ["v-opt","v-da","v-afrr"]) document.getElementById(id).textContent="—";
+  chargerAfrr(jour);
 }
 
 (async () => {

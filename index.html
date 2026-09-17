@@ -73,23 +73,38 @@ let graphe = null, grapheAfrr = null;
 const couleur = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 async function chargerAfrr(jour){
-  const r = await fetch(`data/afrr_capacite/${jour}.json`, {cache:"no-store"});
   const vide = document.getElementById("vide-afrr");
   if(grapheAfrr){ grapheAfrr.destroy(); grapheAfrr = null; }
-  if(!r.ok){ vide.hidden=false; return; }
-  const pts = (await r.json()).filter(p => p.horizon === "DAILY");
-  if(!pts.length){ vide.hidden=false; return; }
-  vide.hidden=true;
-  const pas = [...new Set(pts.map(p => p.debut))].sort();
-  const serie = sens => pas.map(d => { const p = pts.find(q => q.debut===d && q.sens===sens); return p ? p.prix_eur_mw_h : null; });
-  grapheAfrr = new Chart(document.getElementById("g-afrr"), {
-    type:"line",
-    data:{labels: pas.map(d => d.slice(11,16)), datasets:[
-      {label:"Hausse", data:serie("UP"), borderColor:couleur("--hausse"), borderWidth:2, pointRadius:0, stepped:true},
-      {label:"Baisse", data:serie("DOWN"), borderColor:couleur("--baisse"), borderWidth:2, pointRadius:0, stepped:true}]},
-    options:{responsive:true, plugins:{legend:{position:"bottom"}},
-      scales:{x:{ticks:{maxTicksLimit:12}}, y:{title:{display:true,text:"€/MW/h"}}}}
-  });
+  try{
+    const r = await fetch(`data/afrr_capacite/${jour}.json`, {cache:"no-store"});
+    if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée aFRR pour cette journée."; return; }
+    const tous = await r.json();
+    const daily = tous.filter(p => String(p.horizon).toUpperCase()==="DAILY");
+    const pts = daily.length ? daily : tous;
+    const sens = [...new Set(pts.map(p => p.sens))];
+    const horizons = [...new Set(tous.map(p => p.horizon))];
+    const up = sens.find(s => /UP/i.test(s) && !/DOWN/i.test(s));
+    const down = sens.find(s => /DOWN/i.test(s) && !/UP/i.test(s));
+    const pas = [...new Set(pts.map(p => p.debut))].sort();
+    const serie = s => pas.map(d => { const p = pts.find(q => q.debut===d && q.sens===s); return p ? p.prix_eur_mw_h : null; });
+    const datasets = [];
+    if(up)   datasets.push({label:"Hausse", data:serie(up),   borderColor:couleur("--hausse"), borderWidth:2, pointRadius:0, stepped:true});
+    if(down) datasets.push({label:"Baisse", data:serie(down), borderColor:couleur("--baisse"), borderWidth:2, pointRadius:0, stepped:true});
+    if(!pts.length || !datasets.length){
+      vide.hidden=false;
+      vide.textContent=`Fichier lu : ${tous.length} valeurs, sens trouvés : ${sens.join(", ")||"aucun"}, horizons : ${horizons.join(", ")||"aucun"}. Tracé impossible.`;
+      return;
+    }
+    vide.hidden=true;
+    grapheAfrr = new Chart(document.getElementById("g-afrr"), {
+      type:"line",
+      data:{labels: pas.map(d => d.slice(11,16)), datasets},
+      options:{responsive:true, plugins:{legend:{position:"bottom"}},
+        scales:{x:{ticks:{maxTicksLimit:12}}, y:{title:{display:true,text:"€/MW/h"}}}}
+    });
+  }catch(e){
+    vide.hidden=false; vide.textContent="Erreur aFRR : " + e.message;
+  }
 }
 
 async function charger(jour){

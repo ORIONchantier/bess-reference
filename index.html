@@ -27,7 +27,8 @@
   .bloc-titre h2{margin:0;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
   .bloc-titre .unite{margin-left:auto;font-size:11px;color:var(--cyan);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);padding:2px 8px;border-radius:3px}
   label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--sourd)}
-  label input[type=radio]{accent-color:var(--cyan);margin-right:4px;vertical-align:-1px}
+  label input[type=radio],label input[type=checkbox]{accent-color:var(--cyan);margin-right:4px;vertical-align:-1px}
+  label:has(input:disabled){opacity:.35}
   select{font:inherit;font-size:12px;color:var(--texte);background:#0f1522;border:1px solid var(--bord);border-radius:4px;padding:5px 10px}
   .tuiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
   .tuile{background:var(--carte);border:1px solid var(--bord);border-top:2px solid var(--coul,var(--cyan));border-radius:6px;padding:12px 16px}
@@ -38,6 +39,13 @@
   .bloc:fullscreen{background:var(--fond);padding:24px 32px;overflow:auto;display:flex;flex-direction:column}
   .bloc:fullscreen .graphe{height:calc(100vh - 120px);flex:1}
   .bloc.deux:fullscreen .graphe{height:calc(50vh - 130px)}
+  textarea,#ida-jeton{width:100%;font:inherit;font-size:12px;color:var(--texte);background:#0f1522;border:1px solid var(--bord);border-radius:4px;padding:8px;margin:6px 0}
+  .ligne-depot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0}
+  .bouton:disabled{opacity:.4;cursor:not-allowed}
+  button.bouton{border:0;cursor:pointer}
+  .jeton{margin-top:8px}
+  .jeton summary{cursor:pointer;color:var(--cyan);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+  .jeton label{margin-right:12px}
   .agrandir{font:inherit;font-size:14px;line-height:1;color:var(--cyan);background:none;border:1px solid var(--bord);border-radius:4px;padding:4px 8px;cursor:pointer}
   .agrandir:hover{border-color:var(--cyan)}
   .vide{color:var(--sourd);padding:36px;text-align:center}
@@ -91,8 +99,39 @@
   </div>
 
   <div class="bloc">
-    <div class="bloc-titre"><h2>Prix day-ahead France</h2><span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
+    <div class="bloc-titre"><h2>Prix spot France : day-ahead et enchères intraday</h2>
+      <span id="ida-cases">
+        <label><input type="checkbox" data-serie="DA" checked> DA</label>
+        <label><input type="checkbox" data-serie="IDA1" disabled> IDA1</label>
+        <label><input type="checkbox" data-serie="IDA2" disabled> IDA2</label>
+        <label><input type="checkbox" data-serie="IDA3" disabled> IDA3</label>
+      </span>
+      <span class="note" id="ida-note"></span>
+      <span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
     <div class="graphe"><canvas id="g-da"></canvas></div><div class="vide" id="vide-da" hidden></div>
+  </div>
+
+  <div class="bloc" id="bloc-depot">
+    <div class="bloc-titre">
+      <h2>Déposer une enchère intraday pour la journée sélectionnée</h2>
+      <label><input type="radio" name="ench" value="IDA1" checked> IDA1</label>
+      <label><input type="radio" name="ench" value="IDA2"> IDA2</label>
+      <label><input type="radio" name="ench" value="IDA3"> IDA3</label>
+      <span class="note">Sur EPEX : résultats SIDC IDA, zone France, sélectionner le tableau, Ctrl+C, coller ci-dessous.</span>
+    </div>
+    <textarea id="ida-texte" rows="6" placeholder="Coller ici le tableau EPEX (créneaux puis lignes de valeurs)"></textarea>
+    <div class="ligne-depot">
+      <button class="bouton" id="ida-verifier" type="button">Vérifier</button>
+      <button class="bouton" id="ida-envoyer" type="button" disabled>Envoyer vers le dépôt</button>
+      <span class="note" id="ida-etat"></span>
+    </div>
+    <details class="jeton">
+      <summary>Jeton GitHub (une fois par appareil)</summary>
+      <div class="note">Pour écrire dans le dépôt, la page a besoin d'un jeton personnel GitHub à ton nom : github.com, Settings, Developer settings, Personal access tokens, Fine-grained tokens, Generate new token. Repository access : Only select repositories, bess-reference. Permissions, Repository permissions, Contents : Read and write. Le jeton est conservé uniquement dans ce navigateur, jamais dans le dépôt ni sur la page publique.</div>
+      <input type="password" id="ida-jeton" placeholder="github_pat_..." autocomplete="off">
+      <label><input type="checkbox" id="ida-memoriser" checked> Mémoriser sur cet appareil</label>
+      <button class="bouton" id="ida-oublier" type="button">Oublier le jeton</button>
+    </details>
   </div>
 
   <div class="bloc">
@@ -164,20 +203,44 @@ const grille = {grid:{color:"#1a2231"}};
 const opts = (yTitre, extra={}) => ({responsive:true, plugins:{legend:{position:"bottom"}},
   scales:{x:{...grille, ticks:{maxTicksLimit:12}}, y:{...grille, title:{display:true,text:yTitre}}}, ...extra});
 
+let idaDispo = {};
+const couleursIda = {IDA1:"#f97316", IDA2:"#ec4899", IDA3:"#eab308"};
 async function chargerDA(jour){
   const vide = document.getElementById("vide-da");
   if(graphe){ graphe.destroy(); graphe = null; }
+  const encheres = idaDispo[jour] || [];
+  const note = document.getElementById("ida-note");
+  note.textContent = encheres.length ? "" : "Aucune enchère intraday déposée pour ce jour.";
+  for(const cb of document.querySelectorAll('#ida-cases input[type="checkbox"]')){
+    const s = cb.dataset.serie;
+    if(s !== "DA"){ cb.disabled = !encheres.includes(s); if(cb.disabled) cb.checked = false; }
+  }
   for(const id of ["k-da-min","k-da-max","k-da-spread"]) txt(id, "—");
   const r = await fetch(`data/da/${jour}.json`, {cache:"no-store"});
   if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée day-ahead pour cette journée."; return; }
   vide.hidden=true;
   const pts = (await r.json()).sort(parDate);
   const prix = pts.map(p => Number(p.prix));
+  const cle = p => Math.round(new Date(p.debut).getTime()/60000);
+  const index = new Map(pts.map((p, i) => [cle(p), i]));
+  const cbDA = document.querySelector('#ida-cases input[data-serie="DA"]');
+  const datasets = [{label:"Day-ahead", serie:"DA", data:prix, borderColor:couleur("--da"), borderWidth:1.5, pointRadius:0, stepped:true, hidden: !(cbDA && cbDA.checked), volumes: pts.map(p => p.volume_mw)}];
+  for(const e of encheres){
+    try{
+      const ida = await (await fetch(`data/ida/${jour}-${e}.json`, {cache:"no-store"})).json();
+      const serie = new Array(pts.length).fill(null), vol = new Array(pts.length).fill(null);
+      for(const p of ida.points){ const i = index.get(cle(p)); if(i !== undefined){ serie[i] = p.prix; vol[i] = p.volume_mwh; } }
+      const cb = document.querySelector(`#ida-cases input[data-serie="${e}"]`);
+      datasets.push({label: e + (ida.complet ? "" : " (incomplet)"), serie: e, data: serie, borderColor: couleursIda[e] || "#fff", borderWidth:1.2, borderDash:[3,3], pointRadius:0, stepped:true, hidden: !(cb && cb.checked), volumes: vol});
+    }catch(err){ console.warn("IDA", e, err); }
+  }
   graphe = new Chart(document.getElementById("g-da"), {
     type:"line",
-    data:{labels: pts.map(p => heureParis(p.debut)), datasets:[{label:"Day-ahead", data:prix, borderColor:couleur("--da"), borderWidth:1.5, pointRadius:0, stepped:true}]},
-    options: opts("€/MWh", {plugins:{legend:{display:false}, tooltip:{callbacks:{label: c => `${fmt(c.parsed.y,2)} €/MWh, volume ${fmt(pts[c.dataIndex].volume_mw,0)} MW`}}}})
+    data:{labels: pts.map(p => heureParis(p.debut)), datasets},
+    options: opts("€/MWh", {plugins:{legend:{display:false},
+      tooltip:{callbacks:{label: c => c.parsed.y===null ? null : `${c.dataset.label} : ${fmt(c.parsed.y,2)} €/MWh` + (c.dataset.volumes && c.dataset.volumes[c.dataIndex]!==null ? `, volume ${fmt(c.dataset.volumes[c.dataIndex],0)} ${c.datasetIndex===0 ? "MW" : "MWh"}` : "")}}}})
   });
+  if(encheres.length) note.textContent = "Enchères déposées : " + encheres.join(", ") + ". Cocher pour superposer, décocher pour effacer.";
   const tri = [...prix].sort((a, b) => a - b), n = Math.min(8, tri.length);   // 8 pas de 15 min = 2 h
   txt("k-da-min", fmt(Math.min(...prix), 1)); txt("k-da-max", fmt(Math.max(...prix), 1));
   if(n) txt("k-da-spread", fmt(moy(tri.slice(-n)) - moy(tri.slice(0, n)), 1));
@@ -227,6 +290,11 @@ function dessinerPlan(){
   });
 }
 document.querySelectorAll('input[name="strat"]').forEach(r => r.addEventListener("change", dessinerPlan));
+document.querySelectorAll('#ida-cases input[type="checkbox"]').forEach(cb => cb.addEventListener("change", () => {
+  if(!graphe) return;
+  graphe.data.datasets.forEach((d, i) => { if(d.serie === cb.dataset.serie) graphe.setDatasetVisibility(i, cb.checked); });
+  graphe.update();
+}));
 
 async function chargerResultats(jour){
   const vide = document.getElementById("vide-plan");
@@ -328,6 +396,58 @@ async function chargerEnergie(jour){
   }catch(e){ vide.hidden=false; vide.textContent="Erreur activations : " + e.message; }
 }
 
+// ----- dépôt d'une enchère intraday depuis la page -----
+const DEPOT = {proprietaire:"ORIONchantier", depot:"bess-reference", branche:"main"};
+const CLE_JETON = "bess-reference-jeton-github";
+const RE_CRENEAU = /^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$/;
+const RE_LIGNE = /^\s*(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s*$/;
+function analyserIda(texte){
+  const creneaux = [], lignes = [];
+  for(const raw of texte.split(/\r?\n/)){
+    let m = raw.match(RE_CRENEAU); if(m){ creneaux.push(m.slice(1).map(Number)); continue; }
+    m = raw.replace(/\t/g, " ").match(RE_LIGNE); if(m) lignes.push(m.slice(1).map(v => Number(v.replace(",", "."))));
+  }
+  return {creneaux, lignes};
+}
+const jetonInput = document.getElementById("ida-jeton");
+try{ const j = localStorage.getItem(CLE_JETON); if(j) jetonInput.value = j; }catch(e){}
+document.getElementById("ida-oublier").addEventListener("click", () => { jetonInput.value = ""; try{ localStorage.removeItem(CLE_JETON); }catch(e){} });
+document.getElementById("ida-verifier").addEventListener("click", () => {
+  const etat = document.getElementById("ida-etat"), envoyer = document.getElementById("ida-envoyer");
+  const ench = document.querySelector('input[name="ench"]:checked').value, attendu = ench === "IDA3" ? 48 : 96;
+  const {creneaux, lignes} = analyserIda(document.getElementById("ida-texte").value);
+  envoyer.disabled = true;
+  if(!creneaux.length || !lignes.length){ etat.textContent = `Rien de lisible : ${creneaux.length} créneaux, ${lignes.length} lignes de valeurs.`; return; }
+  if(creneaux.length !== lignes.length){ etat.textContent = `${creneaux.length} créneaux pour ${lignes.length} lignes de valeurs : collage incomplet ou mélangé.`; return; }
+  const prix = lignes.map(l => l[3]);
+  etat.textContent = `${ench} du ${sel.value} : ${creneaux.length} pas${creneaux.length === attendu ? "" : " (attendu " + attendu + ")"}, premier créneau ${String(creneaux[0][0]).padStart(2,"0")}:${String(creneaux[0][1]).padStart(2,"0")}, prix de ${fmt(Math.min(...prix),2)} à ${fmt(Math.max(...prix),2)} €/MWh. Prêt à envoyer.`;
+  envoyer.disabled = false;
+});
+document.getElementById("ida-envoyer").addEventListener("click", async () => {
+  const etat = document.getElementById("ida-etat"), envoyer = document.getElementById("ida-envoyer");
+  const jeton = jetonInput.value.trim();
+  if(!jeton){ etat.textContent = "Il manque le jeton GitHub (voir le volet ci-dessous)."; document.querySelector(".jeton").open = true; return; }
+  if(document.getElementById("ida-memoriser").checked){ try{ localStorage.setItem(CLE_JETON, jeton); }catch(e){} }
+  const ench = document.querySelector('input[name="ench"]:checked').value, jour = sel.value;
+  const chemin = `data/ida/${jour}-${ench}.txt`;
+  const url = `https://api.github.com/repos/${DEPOT.proprietaire}/${DEPOT.depot}/contents/${chemin}`;
+  const entetes = {Authorization: "Bearer " + jeton, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"};
+  envoyer.disabled = true; etat.textContent = "Envoi en cours…";
+  try{
+    let sha = null;
+    const g = await fetch(url + "?ref=" + DEPOT.branche, {headers: entetes});
+    if(g.status === 200) sha = (await g.json()).sha;
+    else if(g.status === 401 || g.status === 403){ etat.textContent = "Jeton refusé par GitHub (droits Contents : Read and write sur bess-reference ?)"; return; }
+    const contenu = btoa(unescape(encodeURIComponent(document.getElementById("ida-texte").value)));
+    const corps = {message: `${ench} ${jour} déposée depuis la page`, content: contenu, branch: DEPOT.branche};
+    if(sha) corps.sha = sha;
+    const r = await fetch(url, {method:"PUT", headers: {...entetes, "Content-Type":"application/json"}, body: JSON.stringify(corps)});
+    if(!r.ok){ const err = await r.json().catch(() => ({})); etat.textContent = "Échec GitHub " + r.status + " : " + (err.message || ""); return; }
+    etat.textContent = `${ench} du ${jour} ${sha ? "remplacée" : "déposée"}. Conversion lancée, la page se met à jour dans une à deux minutes (Ctrl+F5).`;
+    document.getElementById("ida-texte").value = "";
+  }catch(e){ etat.textContent = "Erreur réseau : " + e.message; envoyer.disabled = false; }
+});
+
 function remplir(select, jours){
   for(const j of [...jours].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; select.appendChild(o); }
 }
@@ -345,6 +465,9 @@ function remplir(select, jours){
   try{
     const idx = await (await fetch("data/index.json",{cache:"no-store"})).json();
     txt("maj", idx.mis_a_jour ? "dernière collecte " + idx.mis_a_jour.replace("T"," ") : "");
+    idaDispo = idx.ida || {};
+    const illisibles = idx.ida_illisibles || {};
+    if(Object.keys(illisibles).length) document.getElementById("note-turpe").insertAdjacentHTML("afterend", '<div class="note" style="color:var(--rouge)">Fichiers intraday illisibles : ' + Object.entries(illisibles).map(([f, e]) => f + " (" + e + ")").join(" ; ") + '</div>');
     remplir(sel, idx.jours || []);
     if((idx.jours||[]).length){ sel.value = idx.jours[idx.jours.length-1]; chargerDA(sel.value); chargerAfrr(sel.value); chargerResultats(sel.value); }
     else { const v=document.getElementById("vide-da"); v.hidden=false; v.textContent="Aucune collecte enregistrée : lance le workflow une première fois."; }

@@ -7,6 +7,9 @@ on:
     # Après 14h, le DA de J+1 est pris ; l'aFRR capacité de J+1 dès 9h30 ; les activations aFRR se complètent au fil de la journée.
     - cron: "10 */2 * * *"
   workflow_dispatch:        # bouton "Run workflow" pour lancer à la main
+  push:
+    paths:
+      - "data/ida/*.txt"    # dépôt d'une enchère intraday depuis la page : conversion immédiate
 
 permissions:
   contents: write
@@ -28,6 +31,9 @@ jobs:
         env:
           RTE_KEY_B64: ${{ secrets.RTE_KEY_B64 }}
         run: python scripts/collecte_rte.py
+        continue-on-error: true
+      - name: Lecture des enchères intraday déposées
+        run: python scripts/lecture_ida.py
         continue-on-error: true
       - name: Calcul des revenus de référence
         run: python scripts/calcul_revenu.py

@@ -53,6 +53,9 @@
   .bloc.energie{background:#171326;border-color:#3b2f5e}
   .bloc.energie .bloc-titre h2{color:var(--violet)}
   .bloc.energie .tuile{background:#1d1833}
+  .tuiles.quatre{grid-template-columns:repeat(4,1fr)}
+  .rangee-lib{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--sourd);margin:10px 0 8px}
+  @media (max-width:900px){.tuiles.quatre{grid-template-columns:repeat(2,1fr)}}
   .separateur{border:0;border-top:1px dashed var(--bord);margin:28px 0 20px;position:relative}
   .separateur::after{content:attr(data-label);position:absolute;top:-9px;left:0;background:var(--fond);padding:0 8px 0 0;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--sourd)}
   .jour-nav{display:inline-flex;align-items:center;gap:6px}
@@ -77,7 +80,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-18.2</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-18.3</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -103,11 +106,25 @@
     </details>
   </div>
 
+  <div class="bloc" id="bloc-revenus">
+    <div class="bloc-titre"><h2>Revenus de référence, €/MW/jour net TURPE</h2><span class="note" id="note-expost"></span></div>
+    <div class="rangee-lib">Capacité aFRR + arbitrage DA, sans énergie activée</div>
+    <div class="tuiles quatre">
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt">€/MW/jour net TURPE</div></div>
+      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da">€/MW/jour net TURPE</div></div>
+      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr">€/MW/jour net TURPE</div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real">€/MW/jour net TURPE</div></div>
+    </div>
+    <div class="rangee-lib">Avec l'énergie aFRR activée, estimée ex post une fois la journée livrée</div>
+    <div class="tuiles quatre" style="margin-bottom:0">
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt">€/MW/jour total net</div></div>
+      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">identique : aucune réserve, donc aucune activation</div></div>
+      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr">€/MW/jour total net</div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real">€/MW/jour total net</div></div>
+    </div>
+  </div>
+
   <div class="tuiles">
-    <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt">€/MW/jour net TURPE</div></div>
-    <div class="tuile" style="--coul:var(--cyan)"><div class="lib">Stratégie DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da">€/MW/jour net TURPE</div></div>
-    <div class="tuile" style="--coul:var(--vert)"><div class="lib">Stratégie aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr">€/MW/jour net TURPE</div></div>
-    <div class="tuile" style="--coul:var(--orange)"><div class="lib">Stratégie réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real">€/MW/jour net TURPE</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, optimum</div><div class="val" id="t-opt">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, DA seul</div><div class="val" id="t-da">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, réaliste</div><div class="val" id="t-real">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
@@ -116,16 +133,6 @@
     <div class="tuile" style="--coul:var(--rose)"><div class="lib">Spread DA 2h</div><div class="val" id="k-da-spread">—</div><div class="sub">€/MWh, 2 h les plus chères moins 2 h les moins chères</div></div>
     <div class="tuile" style="--coul:var(--violet)"><div class="lib">aFRR baisse, moyenne</div><div class="val" id="k-afrr-down">—</div><div class="sub">€/MW/h sur la journée</div></div>
     <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR hausse, moyenne</div><div class="val" id="k-afrr-up">—</div><div class="sub">€/MW/h sur la journée</div></div>
-  </div>
-
-  <div class="bloc" id="bloc-expost">
-    <div class="bloc-titre"><h2>Complément aFRR énergie ex post, journée livrée</h2><span class="note" id="note-expost">Calculé sur les activations déjà publiées, recalculé à chaque passage du robot, définitif quand les 96 pas sont là. Les activations qui feraient sortir le SoC de 5-95 % ou dépasser 2 cycles sont supposées refusées par le prix d'offre en énergie et comptées comme volumes refusés.</span></div>
-    <div class="tuiles" style="margin-bottom:0">
-      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt">€/MW/jour total net</div></div>
-      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">€/MW/jour net, sans aFRR donc sans complément</div></div>
-      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real">€/MW/jour total net</div></div>
-      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr">€/MW/jour total net</div></div>
-    </div>
   </div>
 
   <div class="bloc">

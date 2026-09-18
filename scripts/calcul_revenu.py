@@ -203,9 +203,10 @@ def ex_post(jour: str, res: dict):
     if not path.exists():
         return None
     en = json.loads(path.read_text())
-    if len(en) < 96:
-        return None                                       # journée incomplète, on attend
+    if not en:
+        return None
     par_instant = {instant(e["debut"]): e for e in en}
+    couverts = sum(1 for p in res["optimum"]["plan"] if instant(p["debut"]) in par_instant) if res.get("optimum") and res["optimum"].get("plan") else len(en)
     utile = SOC_MAX - SOC_MIN
     out = {}
     for nom in ("optimum", "afrr_seul", "realiste"):
@@ -237,14 +238,15 @@ def ex_post(jour: str, res: dict):
         if max(soc) > SOC_MAX + 0.5: alertes.append(f"SoC réel au-dessus de 95 % ({max(soc):.0f} kWh)")
         cycles = (sum(p["injection_kw"] for p in plan) * DT + e_up_tot) / ETA / utile
         if cycles > CYCLES + 1e-6: alertes.append(f"budget de cycles dépassé : {cycles:.2f}")
-        if manquants: alertes.append(f"{manquants} pas sans donnée d'activation")
+        if manquants and couverts >= 96: alertes.append(f"{manquants} pas sans donnée d'activation")
         mw = P_KW / 1000
         net = rev_up - cout_dn - turpe
         out[nom] = {"energie_hausse_kwh": round(e_up_tot, 1), "energie_baisse_kwh": round(e_dn_tot, 1),
                     "revenu_hausse_eur": round(rev_up, 2), "cout_baisse_eur": round(cout_dn, 2), "turpe_eur": round(turpe, 2),
                     "complement_net_eur": round(net, 2), "complement_net_eur_par_mw": round(net / mw, 1),
                     "total_net_eur_par_mw": round(o["net_eur_par_mw"] + net / mw, 1),
-                    "cycles_reels": round(cycles, 3), "soc_reel_kwh": soc, "alertes": alertes}
+                    "cycles_reels": round(cycles, 3), "soc_reel_kwh": soc, "alertes": alertes,
+                    "pas_couverts": int(couverts), "partiel": couverts < 96}
     return out or None
 
 
@@ -285,14 +287,18 @@ def main():
     # passe ex post : journées livrées dont les activations sont complètes
     for cible in sorted((DATA / "resultats").glob("????-??-??.json")):
         r = json.loads(cible.read_text())
-        if r.get("ex_post") or r.get("version") != VERSION:
+        if r.get("version") != VERSION:
             continue
+        deja = r.get("ex_post") or {}
+        if deja and not any(v.get("partiel") for v in deja.values()):
+            continue                                       # définitif, rien à refaire
         xp = ex_post(cible.stem, r)
         if xp:
             r["ex_post"] = xp
             cible.write_text(json.dumps(r, ensure_ascii=False))
-            print(f"{cible.stem} : ex post énergie, optimum {xp.get('optimum', {}).get('complement_net_eur_par_mw', '?')} €/MW, "
-                  f"réaliste {xp.get('realiste', {}).get('complement_net_eur_par_mw', '?')} €/MW")
+            o = xp.get("optimum", {})
+            print(f"{cible.stem} : ex post énergie {'partiel ' + str(o.get('pas_couverts')) + '/96' if o.get('partiel') else 'définitif'}, "
+                  f"optimum {o.get('complement_net_eur_par_mw', '?')} €/MW, réaliste {xp.get('realiste', {}).get('complement_net_eur_par_mw', '?')} €/MW")
     idx_path = DATA / "index.json"
     idx = json.loads(idx_path.read_text()) if idx_path.exists() else {}
     idx["resultats"] = sorted(p.stem for p in (DATA / "resultats").glob("????-??-??.json"))

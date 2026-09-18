@@ -93,6 +93,7 @@
     <div class="bloc-titre"><h2>Complément aFRR énergie ex post, journée livrée</h2><span class="note" id="note-expost">Calculé sur les activations déjà publiées, recalculé à chaque passage du robot, définitif quand les 96 pas sont là. Les activations qui feraient sortir le SoC de 5-95 % ou dépasser 2 cycles sont supposées refusées par le prix d'offre en énergie et comptées comme volumes refusés.</span></div>
     <div class="tuiles" style="margin-bottom:0">
       <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt">€/MW/jour total net</div></div>
+      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">€/MW/jour net, sans aFRR donc sans complément</div></div>
       <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real">€/MW/jour total net</div></div>
       <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr">€/MW/jour total net</div></div>
     </div>
@@ -117,7 +118,8 @@
       <label><input type="radio" name="ench" value="IDA1" checked> IDA1</label>
       <label><input type="radio" name="ench" value="IDA2"> IDA2</label>
       <label><input type="radio" name="ench" value="IDA3"> IDA3</label>
-      <span class="note">Sur EPEX : résultats SIDC IDA, zone France, sélectionner le tableau, Ctrl+C, coller ci-dessous.</span>
+      <a class="bouton" href="https://www.epexspot.com/fr/node/180" target="_blank" rel="noopener">Ouvrir les résultats EPEX ↗</a>
+      <span class="note">Sur EPEX : Auction, Intraday, SIDC IDA1/2/3, zone France, date de livraison ; sélectionner le tableau, Ctrl+C, coller ci-dessous.</span>
     </div>
     <textarea id="ida-texte" rows="6" placeholder="Coller ici le tableau EPEX (créneaux puis lignes de valeurs)"></textarea>
     <div class="ligne-depot">
@@ -300,7 +302,7 @@ async function chargerResultats(jour){
   const vide = document.getElementById("vide-plan");
   if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
   resultatsCourants = null;
-  for(const id of ["v-opt","v-da","v-afrr","v-real","t-opt","t-da","t-afrr","t-real","x-opt","x-real","x-afrr"]) txt(id, "—");
+  for(const id of ["v-opt","v-da","v-afrr","v-real","t-opt","t-da","t-afrr","t-real","x-opt","x-da","x-real","x-afrr"]) txt(id, "—");
   for(const id of ["s-opt","s-da","s-afrr","s-real"]) txt(id, "€/MW/jour net TURPE");
   for(const id of ["xs-opt","xs-real","xs-afrr"]) txt(id, "€/MW/jour total net");
   try{
@@ -326,6 +328,7 @@ async function chargerResultats(jour){
       txt(sid, `€/MW/jour ${v.partiel ? "provisoire, " + v.pas_couverts + "/96 pas publiés" : "total net"} · complément énergie ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)} (↑ ${fmt(v.energie_hausse_kwh,0)} kWh, ↓ ${fmt(v.energie_baisse_kwh,0)} kWh) · refusé par le prix pour tenir SoC et cycles : ↑ ${fmt(v.refusee_hausse_kwh,0)} kWh, ↓ ${fmt(v.refusee_baisse_kwh,0)} kWh · ${fmt(v.cycles_reels,2)} cycles · écart SoC fin de journée ${v.ecart_soc_fin_kwh >= 0 ? "+" : ""}${fmt(100*v.ecart_soc_fin_kwh/capaciteKwh,1)} pt${v.alertes.length ? " · " + v.alertes.join(" ; ") : ""}`);
     };
     metX("x-opt", "xs-opt", "optimum"); metX("x-real", "xs-real", "realiste"); metX("x-afrr", "xs-afrr", "afrr_seul");
+    if(res.da_seul && !res.da_seul.erreur) txt("x-da", fmt(res.da_seul.net_eur_par_mw, 0));
     dessinerPlan();
   }catch(e){ vide.hidden=false; vide.textContent="Erreur résultats : " + e.message; }
 }

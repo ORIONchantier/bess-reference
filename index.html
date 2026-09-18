@@ -82,7 +82,7 @@
   </div>
 
   <div class="bloc" id="bloc-expost">
-    <div class="bloc-titre"><h2>Complément aFRR énergie ex post, journée livrée</h2><span class="note" id="note-expost">Calculé sur les activations déjà publiées, recalculé à chaque passage du robot, définitif quand les 96 pas sont là.</span></div>
+    <div class="bloc-titre"><h2>Complément aFRR énergie ex post, journée livrée</h2><span class="note" id="note-expost">Calculé sur les activations déjà publiées, recalculé à chaque passage du robot, définitif quand les 96 pas sont là. Les activations qui feraient sortir le SoC de 5-95 % ou dépasser 2 cycles sont supposées refusées par le prix d'offre en énergie et comptées comme volumes refusés.</span></div>
     <div class="tuiles" style="margin-bottom:0">
       <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt">€/MW/jour total net</div></div>
       <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real">€/MW/jour total net</div></div>
@@ -255,7 +255,7 @@ async function chargerResultats(jour){
     const metX = (id, sid, k) => {
       const v = xp[k]; if(!v){ txt(sid, "en attente des activations complètes de la journée"); return; }
       txt(id, fmt(v.total_net_eur_par_mw, 0));
-      txt(sid, `€/MW/jour ${v.partiel ? "provisoire, " + v.pas_couverts + "/96 pas publiés" : "total net"} · complément énergie ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)} (↑ ${fmt(v.energie_hausse_kwh,0)} kWh, ↓ ${fmt(v.energie_baisse_kwh,0)} kWh), ${fmt(v.cycles_reels,2)} cycles réels${v.alertes.length ? " · ALERTE : " + v.alertes.join(" ; ") : ""}`);
+      txt(sid, `€/MW/jour ${v.partiel ? "provisoire, " + v.pas_couverts + "/96 pas publiés" : "total net"} · complément énergie ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)} (↑ ${fmt(v.energie_hausse_kwh,0)} kWh, ↓ ${fmt(v.energie_baisse_kwh,0)} kWh) · refusé par le prix pour tenir SoC et cycles : ↑ ${fmt(v.refusee_hausse_kwh,0)} kWh, ↓ ${fmt(v.refusee_baisse_kwh,0)} kWh · ${fmt(v.cycles_reels,2)} cycles · écart SoC fin de journée ${v.ecart_soc_fin_kwh >= 0 ? "+" : ""}${fmt(100*v.ecart_soc_fin_kwh/capaciteKwh,1)} pt${v.alertes.length ? " · " + v.alertes.join(" ; ") : ""}`);
     };
     metX("x-opt", "xs-opt", "optimum"); metX("x-real", "xs-real", "realiste"); metX("x-afrr", "xs-afrr", "afrr_seul");
     dessinerPlan();

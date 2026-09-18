@@ -25,7 +25,7 @@ CYCLES = B["cycles_max_par_jour"]
 K = B.get("facteur_marge_afrr_k", 1.0)
 BLOC = CFG.get("afrr", {}).get("bloc_reservation_min", 60)
 DT = 0.25                                                               # h par pas
-VERSION = 3                                                             # incrémenter force le recalcul des jours anciens
+VERSION = 4                                                             # incrémenter force le recalcul des jours anciens
 
 
 def instant(iso: str) -> int:
@@ -214,9 +214,17 @@ def ex_post(jour: str, res: dict):
         if not o or o.get("erreur") or not o.get("plan"):
             continue
         plan = o["plan"]
-        rev_up = cout_dn = turpe = e_up_tot = e_dn_tot = 0.0
-        soc = []; s_cur = o["soc_initial_kwh"]; manquants = 0
-        for pt in plan:
+        n = len(plan)
+        soc_plan = [pt["soc_kwh"] for pt in plan]
+        # bornes sur l'écart cumulé d'énergie dû aux activations, pour que le plan reste tenable jusqu'au soir
+        suf_max = [0.0] * n; suf_min = [0.0] * n
+        m1, m2 = -1e9, 1e9
+        for t in range(n - 1, -1, -1):
+            m1, m2 = max(m1, soc_plan[t]), min(m2, soc_plan[t]); suf_max[t], suf_min[t] = m1, m2
+        budget_cycles = CYCLES * utile - sum(pt["injection_kw"] for pt in plan) * DT / ETA   # kWh batterie encore déchargeables
+        rev_up = cout_dn = turpe = e_up_tot = e_dn_tot = ref_up = ref_dn = 0.0
+        delta = 0.0; soc = []; manquants = 0
+        for t, pt in enumerate(plan):
             e = par_instant.get(instant(pt["debut"]))
             if e is None:
                 manquants += 1; taux_up = taux_dn = 0.0; pu = pd = 0.0
@@ -225,27 +233,32 @@ def ex_post(jour: str, res: dict):
                 taux_up = min(1.0, (e.get("active_hausse_mw") or 0) / bu) if bu else 0.0
                 taux_dn = min(1.0, abs(e.get("active_baisse_mw") or 0) / bd) if bd else 0.0
                 pu, pd = e.get("prix_hausse_eur_mwh") or 0.0, e.get("prix_baisse_eur_mwh") or 0.0
-            e_up = pt["reserve_hausse_kw"] * taux_up * DT                # kWh injectés (activation hausse)
-            e_dn = pt["reserve_baisse_kw"] * taux_dn * DT                # kWh absorbés (activation baisse)
-            rev_up += e_up / 1000 * pu                                   # versé au fournisseur si positif (RM 4.M)
-            cout_dn += e_dn / 1000 * pd                                  # payé par le fournisseur si positif (RM 4.M)
+            d_up = pt["reserve_hausse_kw"] * taux_up * DT              # kWh demandés à la hausse (côté réseau)
+            d_dn = pt["reserve_baisse_kw"] * taux_dn * DT              # kWh demandés à la baisse
+            # plafonds : SoC tenable sur le reste de la journée, et budget de cycles
+            max_dn = max(0.0, (SOC_MAX - suf_max[t] - delta) / ETA)
+            max_up = max(0.0, min((delta - (SOC_MIN - suf_min[t])) * ETA, budget_cycles * ETA))
+            e_up, e_dn = min(d_up, max_up), min(d_dn, max_dn)
+            ref_up += d_up - e_up; ref_dn += d_dn - e_dn
+            rev_up += e_up / 1000 * pu
+            cout_dn += e_dn / 1000 * pd
             turpe += e_dn / 1000 * pt["turpe"]
             e_up_tot += e_up; e_dn_tot += e_dn
-            s_cur += (pt["soutirage_kw"] * DT + e_dn) * ETA - (pt["injection_kw"] * DT + e_up) / ETA
-            soc.append(round(s_cur, 1))
+            budget_cycles -= e_up / ETA
+            delta += e_dn * ETA - e_up / ETA
+            soc.append(round(soc_plan[t] + delta, 1))
         alertes = []
-        if min(soc) < SOC_MIN - 0.5: alertes.append(f"SoC réel sous 5 % ({min(soc):.0f} kWh) : plan DA infaisable avec ces activations")
-        if max(soc) > SOC_MAX + 0.5: alertes.append(f"SoC réel au-dessus de 95 % ({max(soc):.0f} kWh)")
-        cycles = (sum(p["injection_kw"] for p in plan) * DT + e_up_tot) / ETA / utile
-        if cycles > CYCLES + 1e-6: alertes.append(f"budget de cycles dépassé : {cycles:.2f}")
         if manquants and couverts >= 96: alertes.append(f"{manquants} pas sans donnée d'activation")
+        cycles = (sum(pt["injection_kw"] for pt in plan) * DT + e_up_tot) / ETA / utile
         mw = P_KW / 1000
         net = rev_up - cout_dn - turpe
         out[nom] = {"energie_hausse_kwh": round(e_up_tot, 1), "energie_baisse_kwh": round(e_dn_tot, 1),
+                    "refusee_hausse_kwh": round(ref_up, 1), "refusee_baisse_kwh": round(ref_dn, 1),
                     "revenu_hausse_eur": round(rev_up, 2), "cout_baisse_eur": round(cout_dn, 2), "turpe_eur": round(turpe, 2),
                     "complement_net_eur": round(net, 2), "complement_net_eur_par_mw": round(net / mw, 1),
                     "total_net_eur_par_mw": round(o["net_eur_par_mw"] + net / mw, 1),
-                    "cycles_reels": round(cycles, 3), "soc_reel_kwh": soc, "alertes": alertes,
+                    "cycles_reels": round(cycles, 3), "ecart_soc_fin_kwh": round(delta, 1),
+                    "soc_reel_kwh": soc, "alertes": alertes,
                     "pas_couverts": int(couverts), "partiel": couverts < 96}
     return out or None
 

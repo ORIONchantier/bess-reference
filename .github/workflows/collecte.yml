@@ -2,10 +2,10 @@ name: Collecte RTE quotidienne
 
 on:
   schedule:
-    # Toutes les deux heures, à la 10e minute (heure UTC, soit 2h10, 4h10 ... 22h10 Paris en été, décalé d'une heure en hiver).
+    # Toutes les 30 minutes (heure UTC). GitHub peut retarder ou sauter des passages aux heures chargées.
     # Avant 14h Paris, le DA renvoyé est celui du jour (déjà stocké) et le script sort en code 2 : sans conséquence.
     # Après 14h, le DA de J+1 est pris ; l'aFRR capacité de J+1 dès 9h30 ; les activations aFRR se complètent au fil de la journée.
-    - cron: "10 */2 * * *"
+    - cron: "5,35 * * * *"
   workflow_dispatch:        # bouton "Run workflow" pour lancer à la main
   push:
     paths:

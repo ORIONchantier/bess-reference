@@ -34,7 +34,12 @@
   .tuile .lib{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--sourd)}
   .tuile .val{font-size:24px;font-weight:700;color:var(--coul,var(--cyan));margin:4px 0 2px}
   .tuile .sub{font-size:11px;color:var(--sourd)}
-  canvas{width:100%!important;max-height:320px}
+  .graphe{position:relative;height:320px}
+  .bloc:fullscreen{background:var(--fond);padding:24px 32px;overflow:auto;display:flex;flex-direction:column}
+  .bloc:fullscreen .graphe{height:calc(100vh - 120px);flex:1}
+  .bloc.deux:fullscreen .graphe{height:calc(50vh - 130px)}
+  .agrandir{font:inherit;font-size:14px;line-height:1;color:var(--cyan);background:none;border:1px solid var(--bord);border-radius:4px;padding:4px 8px;cursor:pointer}
+  .agrandir:hover{border-color:var(--cyan)}
   .vide{color:var(--sourd);padding:36px;text-align:center}
   .note{font-size:11px;color:var(--sourd)}
   footer{color:var(--sourd);font-size:11px;margin-top:24px;line-height:1.6}
@@ -75,13 +80,13 @@
   </div>
 
   <div class="bloc">
-    <div class="bloc-titre"><h2>Prix day-ahead France</h2><span class="unite">€/MWh · pas 15 min</span></div>
-    <canvas id="g-da"></canvas><div class="vide" id="vide-da" hidden></div>
+    <div class="bloc-titre"><h2>Prix day-ahead France</h2><span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
+    <div class="graphe"><canvas id="g-da"></canvas></div><div class="vide" id="vide-da" hidden></div>
   </div>
 
   <div class="bloc">
-    <div class="bloc-titre"><h2>Prix marginal aFRR capacité, appel d'offres journalier</h2><span class="unite">€/MW/h · pas 15 min</span></div>
-    <canvas id="g-afrr"></canvas><div class="vide" id="vide-afrr" hidden></div>
+    <div class="bloc-titre"><h2>Prix marginal aFRR capacité, appel d'offres journalier</h2><span class="unite">€/MW/h · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
+    <div class="graphe"><canvas id="g-afrr"></canvas></div><div class="vide" id="vide-afrr" hidden></div>
   </div>
 
   <div class="bloc">
@@ -92,16 +97,18 @@
       <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
       <span class="note">Énergie planifiée : marché DA uniquement. L'aFRR est une puissance réservée, l'énergie activée est estimée ex post.</span>
       <span class="unite">kW et SoC % · pas 15 min</span>
+      <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
     </div>
-    <canvas id="g-plan"></canvas><div class="vide" id="vide-plan" hidden></div>
+    <div class="graphe"><canvas id="g-plan"></canvas></div><div class="vide" id="vide-plan" hidden></div>
   </div>
 
-  <div class="bloc">
+  <div class="bloc deux">
     <div class="bloc-titre">
       <h2>Activations aFRR énergie, journée passée</h2>
       <label for="jour-energie">Journée</label>
       <select id="jour-energie"></select>
       <span class="unite">MW et €/MWh · pas 15 min</span>
+      <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
     </div>
     <div class="tuiles" style="margin-bottom:12px">
       <div class="tuile" style="--coul:var(--vert)"><div class="lib">Énergie activée à la hausse</div><div class="val" id="e-mwh-up">—</div><div class="sub">MWh pour la France, prix moyen <span id="e-pm-up">—</span> €/MWh</div></div>
@@ -109,9 +116,9 @@
       <div class="tuile" style="--coul:var(--orange)"><div class="lib">Taux d'activation hausse</div><div class="val" id="e-taux-up">—</div><div class="sub">volume activé / besoin exprimé par RTE</div></div>
       <div class="tuile" style="--coul:var(--orange)"><div class="lib">Taux d'activation baisse</div><div class="val" id="e-taux-down">—</div><div class="sub">volume activé / besoin exprimé par RTE</div></div>
     </div>
-    <canvas id="g-vol"></canvas><div class="vide" id="vide-energie" hidden></div>
+    <div class="graphe"><canvas id="g-vol"></canvas></div><div class="vide" id="vide-energie" hidden></div>
     <div style="height:14px"></div>
-    <canvas id="g-prix-en"></canvas>
+    <div class="graphe"><canvas id="g-prix-en"></canvas></div>
   </div>
 
   <footer>Prix day-ahead : données EPEX SPOT SE et Nord Pool AS, propriété exclusive de ces bourses, obtenues via l'API Wholesale Market de RTE (data.rte-france.com). Usage interne Orion Energies uniquement. aFRR : RTE, API Balancing Capacity et Balancing Energy. Revenus de référence : optimisation linéaire à information parfaite (scripts/calcul_revenu.py), paramètres dans config/parametres.json. Le complément aFRR énergie ex post n'est pas encore inclus.</footer>
@@ -123,6 +130,11 @@ Chart.defaults.font.family = '"JetBrains Mono", Consolas, monospace';
 Chart.defaults.font.size = 11;
 Chart.defaults.borderColor = "#1f2a3a";
 Chart.defaults.interaction = {mode:"index", intersect:false};
+Chart.defaults.maintainAspectRatio = false;
+document.querySelectorAll(".agrandir").forEach(b => b.addEventListener("click", () => {
+  const bloc = b.closest(".bloc");
+  if(document.fullscreenElement) document.exitFullscreen(); else bloc.requestFullscreen();
+}));
 Chart.defaults.elements.point.hitRadius = 12;
 Chart.defaults.elements.line.borderWidth = 1.5;
 

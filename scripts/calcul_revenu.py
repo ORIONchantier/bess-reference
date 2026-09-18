@@ -25,6 +25,12 @@ CYCLES = B["cycles_max_par_jour"]
 K = B.get("facteur_marge_afrr_k", 1.0)
 BLOC = CFG.get("afrr", {}).get("bloc_reservation_min", 60)
 DT = 0.25                                                               # h par pas
+VERSION = 2                                                             # incrémenter force le recalcul des jours anciens
+
+
+def instant(iso: str) -> int:
+    """Clé de raccordement DA / aFRR : l'instant, pas la chaîne (RTE mélange UTC et heure de Paris)."""
+    return int(dt.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp())
 
 
 def turpe_eur_mwh(t: dt.datetime) -> float:
@@ -45,7 +51,7 @@ def charger_jour(jour: str):
     prix_cap = {}
     for c in cap:
         v = c.get("prix_eur_mw_15min", c.get("prix_eur_mw_h"))        # anciens fichiers : valeur brute dans _15min
-        prix_cap[(c["debut"], c["sens"].upper())] = float(v)
+        prix_cap[(instant(c["debut"]), c["sens"].upper())] = float(v)
     return da, prix_cap
 
 
@@ -62,12 +68,13 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True):
     def prix_bloc(sens):
         out = []
         for b in range(nb):
-            vals = [prix_cap.get((da[i]["debut"], sens)) for i in range(b * pas_par_bloc, min(n, (b + 1) * pas_par_bloc))]
+            vals = [prix_cap.get((instant(da[i]["debut"]), sens)) for i in range(b * pas_par_bloc, min(n, (b + 1) * pas_par_bloc))]
             vals = [v for v in vals if v is not None]
             out.append(float(np.mean(vals)) if vals else None)
         return out
     p_up, p_dn = prix_bloc("UP"), prix_bloc("DOWN")
-    afrr_ok = avec_afrr and any(v is not None for v in p_up + p_dn)
+    nb_raccordes = sum(v is not None for v in p_up + p_dn)
+    afrr_ok = avec_afrr and nb_raccordes > 0
     p_up = [v if v is not None else 0.0 for v in p_up]
     p_dn = [v if v is not None else 0.0 for v in p_dn]
 
@@ -136,6 +143,7 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True):
     mw = P_KW / 1000
     brut = rev_da_brut + rev_up + rev_dn
     return {
+        "blocs_afrr_raccordes": int(nb_raccordes), "blocs_total": 2 * nb,
         "brut_eur": round(brut, 2), "net_eur": round(brut - cout_turpe, 2),
         "brut_eur_par_mw": round(brut / mw, 1), "net_eur_par_mw": round((brut - cout_turpe) / mw, 1),
         "da_brut_eur": round(rev_da_brut, 2), "turpe_eur": round(cout_turpe, 2),
@@ -151,7 +159,7 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True):
 
 def calculer(jour: str) -> dict:
     da, prix_cap = charger_jour(jour)
-    out = {"jour": jour, "calcule_le": dt.datetime.now(PARIS).isoformat(timespec="minutes"),
+    out = {"jour": jour, "version": VERSION, "calcule_le": dt.datetime.now(PARIS).isoformat(timespec="minutes"),
            "puissance_mw": P_KW / 1000, "afrr_disponible": bool(prix_cap)}
     out["optimum"] = optimiser(da, prix_cap, True, True)
     out["da_seul"] = optimiser(da, prix_cap, True, False)
@@ -169,8 +177,15 @@ def main():
     for j in jours:
         cible = DATA / "resultats" / f"{j}.json"
         if cible.exists() and not force:
-            continue
+            try:
+                if json.loads(cible.read_text()).get("version") == VERSION:
+                    continue
+            except Exception:
+                pass
         r = calculer(j)
+        o = r["optimum"] or {}
+        if r["afrr_disponible"] and not o.get("blocs_afrr_raccordes"):
+            print(f"{j} : ATTENTION, prix aFRR présents mais aucun pas raccordé au DA (horodatages ?)")
         cible.write_text(json.dumps(r, ensure_ascii=False))
         o = r["optimum"] or {}
         print(f"{j} : optimum {o.get('net_eur_par_mw', '?')} €/MW net, DA seul {(r['da_seul'] or {}).get('net_eur_par_mw', '?')}, "

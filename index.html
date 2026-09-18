@@ -60,9 +60,9 @@
   </div>
 
   <div class="tuiles">
-    <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub">€/MW/jour</div></div>
-    <div class="tuile" style="--coul:var(--cyan)"><div class="lib">Stratégie DA seul</div><div class="val" id="v-da">—</div><div class="sub">€/MW/jour</div></div>
-    <div class="tuile" style="--coul:var(--vert)"><div class="lib">Stratégie aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub">€/MW/jour</div></div>
+    <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt">€/MW/jour net TURPE</div></div>
+    <div class="tuile" style="--coul:var(--cyan)"><div class="lib">Stratégie DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da">€/MW/jour net TURPE</div></div>
+    <div class="tuile" style="--coul:var(--vert)"><div class="lib">Stratégie aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr">€/MW/jour net TURPE</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">DA min</div><div class="val" id="k-da-min">—</div><div class="sub">€/MWh</div></div>
     <div class="tuile" style="--coul:var(--jaune)"><div class="lib">DA max</div><div class="val" id="k-da-max">—</div><div class="sub">€/MWh</div></div>
     <div class="tuile" style="--coul:var(--rose)"><div class="lib">Spread DA 2h</div><div class="val" id="k-da-spread">—</div><div class="sub">€/MWh, 2 h les plus chères moins 2 h les moins chères</div></div>
@@ -78,6 +78,11 @@
   <div class="bloc">
     <div class="bloc-titre"><h2>Prix marginal aFRR capacité, appel d'offres journalier</h2><span class="unite">€/MW/h · pas 15 min</span></div>
     <canvas id="g-afrr"></canvas><div class="vide" id="vide-afrr" hidden></div>
+  </div>
+
+  <div class="bloc">
+    <div class="bloc-titre"><h2>Plan optimal de la batterie</h2><span class="unite">kW et kWh · pas 15 min</span></div>
+    <canvas id="g-plan"></canvas><div class="vide" id="vide-plan" hidden></div>
   </div>
 
   <div class="bloc">
@@ -98,7 +103,7 @@
     <canvas id="g-prix-en"></canvas>
   </div>
 
-  <footer>Prix day-ahead : données EPEX SPOT SE et Nord Pool AS, propriété exclusive de ces bourses, obtenues via l'API Wholesale Market de RTE (data.rte-france.com). Usage interne Orion Energies uniquement. aFRR : RTE, API Balancing Capacity et Balancing Energy. Les trois indicateurs de revenu seront calculés par le script d'optimisation, prochaine étape.</footer>
+  <footer>Prix day-ahead : données EPEX SPOT SE et Nord Pool AS, propriété exclusive de ces bourses, obtenues via l'API Wholesale Market de RTE (data.rte-france.com). Usage interne Orion Energies uniquement. aFRR : RTE, API Balancing Capacity et Balancing Energy. Revenus de référence : optimisation linéaire à information parfaite (scripts/calcul_revenu.py), paramètres dans config/parametres.json. Le complément aFRR énergie ex post n'est pas encore inclus.</footer>
 </main>
 
 <script>
@@ -124,7 +129,7 @@ const opts = (yTitre, extra={}) => ({responsive:true, plugins:{legend:{position:
 async function chargerDA(jour){
   const vide = document.getElementById("vide-da");
   if(graphe){ graphe.destroy(); graphe = null; }
-  for(const id of ["v-opt","v-da","v-afrr","k-da-min","k-da-max","k-da-spread"]) txt(id, "—");
+  for(const id of ["k-da-min","k-da-max","k-da-spread"]) txt(id, "—");
   const r = await fetch(`data/da/${jour}.json`, {cache:"no-store"});
   if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée day-ahead pour cette journée."; return; }
   vide.hidden=true;
@@ -140,6 +145,44 @@ async function chargerDA(jour){
   if(n) txt("k-da-spread", fmt(moy(tri.slice(-n)) - moy(tri.slice(0, n)), 1));
 }
 
+let graphePlan = null;
+async function chargerResultats(jour){
+  const vide = document.getElementById("vide-plan");
+  if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
+  for(const id of ["v-opt","v-da","v-afrr"]) txt(id, "—");
+  for(const id of ["s-opt","s-da","s-afrr"]) txt(id, "€/MW/jour net TURPE");
+  try{
+    const r = await fetch(`data/resultats/${jour}.json`, {cache:"no-store"});
+    if(!r.ok){ vide.hidden=false; vide.textContent="Pas encore de calcul pour cette journée."; return; }
+    const res = await r.json();
+    const met = (id, sid, o, detail) => {
+      if(!o || o.erreur){ txt(id, "—"); txt(sid, o && o.erreur ? "calcul impossible : " + o.erreur : "€/MW/jour"); return; }
+      txt(id, fmt(o.net_eur_par_mw, 0));
+      txt(sid, `€/MW/jour net TURPE · brut ${fmt(o.brut_eur_par_mw,0)} · ${detail(o)}`);
+    };
+    met("v-opt", "s-opt", res.optimum, o => `DA ${fmt(o.da_brut_eur/res.puissance_mw,0)}, aFRR ↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)}, TURPE ${fmt(o.turpe_eur/res.puissance_mw,0)}, ${fmt(o.cycles,2)} cycles`);
+    met("v-da", "s-da", res.da_seul, o => `TURPE ${fmt(o.turpe_eur/res.puissance_mw,0)} €/MW, ${fmt(o.cycles,2)} cycles`);
+    met("v-afrr", "s-afrr", res.afrr_seul, o => `↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)} €/MW`);
+    if(!res.afrr_disponible) txt("s-afrr", "prix aFRR capacité non collectés pour cette journée");
+    const plan = (res.optimum && res.optimum.plan) || [];
+    if(!plan.length){ vide.hidden=false; vide.textContent="Pas de plan disponible."; return; }
+    vide.hidden = true;
+    const labels = plan.map(p => heureParis(p.debut));
+    graphePlan = new Chart(document.getElementById("g-plan"), {
+      data:{labels, datasets:[
+        {type:"bar", label:"Soutirage (kW)", data:plan.map(p => -p.soutirage_kw), backgroundColor:"rgba(239,68,68,.7)", yAxisID:"y", stack:"p"},
+        {type:"bar", label:"Injection (kW)", data:plan.map(p => p.injection_kw), backgroundColor:"rgba(34,211,238,.7)", yAxisID:"y", stack:"p"},
+        {type:"line", label:"Réserve aFRR baisse (kW)", data:plan.map(p => -p.reserve_baisse_kw), borderColor:couleur("--baisse"), borderWidth:1.5, borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
+        {type:"line", label:"Réserve aFRR hausse (kW)", data:plan.map(p => p.reserve_hausse_kw), borderColor:couleur("--hausse"), borderWidth:1.5, borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
+        {type:"line", label:"SoC (kWh)", data:plan.map(p => p.soc_kwh), borderColor:couleur("--jaune"), borderWidth:2, pointRadius:0, yAxisID:"y2"}]},
+      options:{responsive:true, plugins:{legend:{position:"bottom"}},
+        scales:{x:{...grille, stacked:true, ticks:{maxTicksLimit:12}},
+                y:{...grille, stacked:true, title:{display:true,text:"kW, soutirage et réserve baisse en négatif"}},
+                y2:{position:"right", grid:{drawOnChartArea:false}, min:0, max:500, title:{display:true,text:"SoC kWh"}}}}
+    });
+  }catch(e){ vide.hidden=false; vide.textContent="Erreur résultats : " + e.message; }
+}
+
 async function chargerAfrr(jour){
   const vide = document.getElementById("vide-afrr");
   if(grapheAfrr){ grapheAfrr.destroy(); grapheAfrr = null; }
@@ -153,7 +196,7 @@ async function chargerAfrr(jour){
     const sens = [...new Set(pts.map(p => p.sens))], horizons = [...new Set(tous.map(p => p.horizon))];
     const up = sens.find(s => /UP/i.test(s) && !/DOWN/i.test(s)), down = sens.find(s => /DOWN/i.test(s) && !/UP/i.test(s));
     const pas = [...new Set(pts.map(p => p.debut))].sort((a, b) => new Date(a) - new Date(b));
-    const serie = s => pas.map(d => { const p = pts.find(q => q.debut===d && q.sens===s); return p ? Number(p.prix_eur_mw_h) : null; });
+    const serie = s => pas.map(d => { const p = pts.find(q => q.debut===d && q.sens===s); return p ? Number(p.prix_eur_mw_15min ?? p.prix_eur_mw_h) : null; });   // anciens fichiers : la valeur brute est dans prix_eur_mw_15min
     const datasets = [];
     if(up)   datasets.push({label:"Hausse", data:serie(up),   borderColor:couleur("--hausse"), borderWidth:1.5, borderDash:[6,3], pointRadius:0, stepped:true});
     if(down) datasets.push({label:"Baisse", data:serie(down), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true});
@@ -220,9 +263,9 @@ function remplir(select, jours){
     const idx = await (await fetch("data/index.json",{cache:"no-store"})).json();
     txt("maj", idx.mis_a_jour ? "dernière collecte " + idx.mis_a_jour.replace("T"," ") : "");
     remplir(sel, idx.jours || []);
-    if((idx.jours||[]).length){ sel.value = idx.jours[idx.jours.length-1]; chargerDA(sel.value); chargerAfrr(sel.value); }
+    if((idx.jours||[]).length){ sel.value = idx.jours[idx.jours.length-1]; chargerDA(sel.value); chargerAfrr(sel.value); chargerResultats(sel.value); }
     else { const v=document.getElementById("vide-da"); v.hidden=false; v.textContent="Aucune collecte enregistrée : lance le workflow une première fois."; }
-    sel.addEventListener("change", e => { chargerDA(e.target.value); chargerAfrr(e.target.value); });
+    sel.addEventListener("change", e => { chargerDA(e.target.value); chargerAfrr(e.target.value); chargerResultats(e.target.value); });
     const en = idx.afrr_energie || [];
     remplir(selEn, en);
     if(en.length){ selEn.value = en[en.length-1]; chargerEnergie(selEn.value); }

@@ -66,14 +66,15 @@ def parse_da(payload: dict):
 
 def parse_afrr_cap(payload: dict) -> list:
     """Guide v5 : result_procured_reserves[] avec reserve, product_type, values[] par pas 15 min.
-    Le prix RTE est en €/MW/15 min ; on ajoute la conversion en €/MW/h (x4)."""
+    Le guide annonce un prix en €/MW/15 min, mais la valeur publiée correspond au €/MW/h affiché sur le site RTE
+    (vérifié le 18/09/2026) : on la reprend telle quelle."""
     pts = []
     for block in payload.get("result_procured_reserves", []):
         if block.get("reserve") != "AFRR":
             continue
         for v in block.get("values", []):
             pts.append({"debut": v["start_date"], "fin": v["end_date"], "sens": v["direction"],
-                        "prix_eur_mw_15min": v["price"], "prix_eur_mw_h": round(4 * v["price"], 4),
+                        "prix_eur_mw_h": v["price"],
                         "offert_mw": v.get("offered_volume"), "retenu_mw": v.get("contracted_volume"),
                         "horizon": v.get("time_horizon"), "produit": block.get("product_type")})
     return pts

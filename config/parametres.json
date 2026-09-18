@@ -12,10 +12,33 @@
     "source": "Grille BT > 36 kVA fournie le 18/09/2026, parties variables uniquement (composantes fixes exclues)",
     "option": "CU4",
     "injection_eur_mwh": 0,
-    "soutirage_eur_mwh": {"HPH": 71.2, "HCH": 43.4, "HPB": 21.9, "HCB": 15.7},
-    "grille_alternative_LU4_eur_mwh": {"HPH": 58.6, "HCH": 35.8, "HPB": 20.7, "HCB": 15.4},
-    "saison_haute_mois": [11, 12, 1, 2, 3],
+    "soutirage_eur_mwh": {
+      "HPH": 71.2,
+      "HCH": 43.4,
+      "HPB": 21.9,
+      "HCB": 15.7
+    },
+    "grille_alternative_LU4_eur_mwh": {
+      "HPH": 58.6,
+      "HCH": 35.8,
+      "HPB": 20.7,
+      "HCB": 15.4
+    },
+    "saison_haute_mois": [
+      11,
+      12,
+      1,
+      2,
+      3
+    ],
     "heures_creuses": "22:00-06:00",
-    "hypotheses_a_confirmer": ["option CU4 plutôt que LU4", "plage heures creuses 22h-6h", "saison haute novembre à mars"]
+    "hypotheses_a_confirmer": [
+      "saison haute novembre à mars (convention TURPE)"
+    ],
+    "confirme": "option CU4 et heures creuses 22h-6h confirmées le 18/09/2026"
+  },
+  "afrr": {
+    "bloc_reservation_min": 60,
+    "note": "réservation décidée par bloc d'une heure ; prix du bloc = moyenne des pas 15 min"
   }
 }

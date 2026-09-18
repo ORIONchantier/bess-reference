@@ -63,6 +63,9 @@
     <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt">€/MW/jour net TURPE</div></div>
     <div class="tuile" style="--coul:var(--cyan)"><div class="lib">Stratégie DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da">€/MW/jour net TURPE</div></div>
     <div class="tuile" style="--coul:var(--vert)"><div class="lib">Stratégie aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr">€/MW/jour net TURPE</div></div>
+    <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, optimum</div><div class="val" id="t-opt">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
+    <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, DA seul</div><div class="val" id="t-da">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
+    <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, aFRR seul</div><div class="val" id="t-afrr">—</div><div class="sub">€/MW/jour, nul tant que les activations ne sont pas modélisées</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">DA min</div><div class="val" id="k-da-min">—</div><div class="sub">€/MWh</div></div>
     <div class="tuile" style="--coul:var(--jaune)"><div class="lib">DA max</div><div class="val" id="k-da-max">—</div><div class="sub">€/MWh</div></div>
     <div class="tuile" style="--coul:var(--rose)"><div class="lib">Spread DA 2h</div><div class="val" id="k-da-spread">—</div><div class="sub">€/MWh, 2 h les plus chères moins 2 h les moins chères</div></div>
@@ -149,7 +152,7 @@ let graphePlan = null;
 async function chargerResultats(jour){
   const vide = document.getElementById("vide-plan");
   if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
-  for(const id of ["v-opt","v-da","v-afrr"]) txt(id, "—");
+  for(const id of ["v-opt","v-da","v-afrr","t-opt","t-da","t-afrr"]) txt(id, "—");
   for(const id of ["s-opt","s-da","s-afrr"]) txt(id, "€/MW/jour net TURPE");
   try{
     const r = await fetch(`data/resultats/${jour}.json`, {cache:"no-store"});
@@ -158,6 +161,7 @@ async function chargerResultats(jour){
     const met = (id, sid, o, detail) => {
       if(!o || o.erreur){ txt(id, "—"); txt(sid, o && o.erreur ? "calcul impossible : " + o.erreur : "€/MW/jour"); return; }
       txt(id, fmt(o.net_eur_par_mw, 0));
+      txt(id.replace("v-", "t-"), fmt(o.turpe_eur / res.puissance_mw, 0));
       txt(sid, `€/MW/jour net TURPE · brut ${fmt(o.brut_eur_par_mw,0)} · ${detail(o)}`);
     };
     met("v-opt", "s-opt", res.optimum, o => `DA ${fmt(o.da_brut_eur/res.puissance_mw,0)}, aFRR ↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)}, TURPE ${fmt(o.turpe_eur/res.puissance_mw,0)}, ${fmt(o.cycles,2)} cycles`);

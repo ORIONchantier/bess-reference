@@ -133,17 +133,18 @@ def main() -> None:
     except Exception as e:
         print("aFRR capacité : échec,", e)
 
-    # aFRR énergie pour J-1 : activations réelles, pour le complément ex post.
-    hier = today - dt.timedelta(days=1)
-    try:
-        en = call(token, RES_AFRR_ENERGIE, bornes(hier))
-        en_pts = parse_afrr_energie(en)
-        save("afrr_energie", hier, en, en_pts)
-        print(f"aFRR énergie {hier} : {len(en_pts)} pas de 15 min")
-        if not en_pts:
-            print("  réponse brute :", json.dumps(en)[:500])
-    except Exception as e:
-        print("aFRR énergie : échec,", e)
+    # aFRR énergie : J-1 (journée complète) et J (partielle, complétée par le passage du lendemain).
+    for jour in (today - dt.timedelta(days=1), today):
+        try:
+            en = call(token, RES_AFRR_ENERGIE, bornes(jour))
+            en_pts = parse_afrr_energie(en)
+            if en_pts:
+                save("afrr_energie", jour, en, en_pts)
+            print(f"aFRR énergie {jour} : {len(en_pts)} pas de 15 min")
+            if not en_pts:
+                print("  réponse brute :", json.dumps(en)[:300])
+        except Exception as e:
+            print(f"aFRR énergie {jour} : échec,", e)
 
     rebuild_index()
     if day != attendu:

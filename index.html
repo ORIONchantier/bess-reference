@@ -54,8 +54,9 @@
       <h2>Journée de livraison J+1</h2>
       <label for="jour">Journée</label>
       <select id="jour"></select>
-      <span class="note">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</span>
+      <span class="note" id="note-batterie">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</span>
     </div>
+    <div class="note" id="note-turpe"></div>
   </div>
 
   <div class="tuiles">
@@ -209,6 +210,12 @@ function remplir(select, jours){
 }
 
 (async () => {
+  try{
+    const cfg = await (await fetch("config/parametres.json",{cache:"no-store"})).json();
+    const b = cfg.batterie, t = cfg.turpe, s = t.soutirage_eur_mwh;
+    txt("note-batterie", `Batterie de référence ${b.puissance_kw} kW / ${b.capacite_kwh} kWh, SoC ${b.soc_min*100}-${b.soc_max*100} %, rendement ${b.rendement_aller_retour*100} %, ${b.cycles_max_par_jour} cycles/jour`);
+    txt("note-turpe", `TURPE de référence : BT > 36 kVA, option ${t.option}, soutirage HPH ${s.HPH} / HCH ${s.HCH} / HPB ${s.HPB} / HCB ${s.HCB} €/MWh, injection ${t.injection_eur_mwh} €/MWh. Heures creuses ${t.heures_creuses}, saison haute novembre à mars. Composantes fixes exclues. Hypothèses à confirmer : ${t.hypotheses_a_confirmer.join(", ")}.`);
+  }catch(e){ txt("note-turpe", "config/parametres.json introuvable."); }
   try{
     const idx = await (await fetch("data/index.json",{cache:"no-store"})).json();
     txt("maj", idx.mis_a_jour ? "dernière collecte " + idx.mis_a_jour.replace("T"," ") : "");

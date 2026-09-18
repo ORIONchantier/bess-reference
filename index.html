@@ -46,6 +46,25 @@
   .jeton{margin-top:8px}
   .jeton summary{cursor:pointer;color:var(--cyan);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
   .jeton label{margin-right:12px}
+  .bloc.plan{background:#161a12;border-color:#3a3a1a}
+  .bloc.plan .bloc-titre h2{color:var(--jaune)}
+  .bloc.plan .graphe{height:480px}
+  .bloc.plan:fullscreen .graphe{height:calc(100vh - 120px)}
+  .bloc.energie{background:#171326;border-color:#3b2f5e}
+  .bloc.energie .bloc-titre h2{color:var(--violet)}
+  .bloc.energie .tuile{background:#1d1833}
+  .separateur{border:0;border-top:1px dashed var(--bord);margin:28px 0 20px;position:relative}
+  .separateur::after{content:attr(data-label);position:absolute;top:-9px;left:0;background:var(--fond);padding:0 8px 0 0;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--sourd)}
+  .jour-nav{display:inline-flex;align-items:center;gap:6px}
+  .jour-nav select{font-size:15px;font-weight:700;padding:7px 12px;border:2px solid var(--cyan);color:var(--cyan)}
+  .bloc.energie .jour-nav select{border-color:var(--violet);color:var(--violet)}
+  .fleche{font:inherit;font-size:16px;line-height:1;color:var(--texte);background:#0f1522;border:1px solid var(--bord);border-radius:4px;padding:6px 10px;cursor:pointer}
+  .fleche:hover{border-color:var(--cyan)}
+  .fleche:disabled{opacity:.3;cursor:not-allowed}
+  .methode summary{cursor:pointer;color:var(--cyan);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+  .methode dl{margin:10px 0 0;display:grid;grid-template-columns:max-content 1fr;gap:6px 16px}
+  .methode dt{color:var(--jaune);font-weight:700;white-space:nowrap}
+  .methode dd{margin:0;color:var(--texte)}
   .agrandir{font:inherit;font-size:14px;line-height:1;color:var(--cyan);background:none;border:1px solid var(--bord);border-radius:4px;padding:4px 8px;cursor:pointer}
   .agrandir:hover{border-color:var(--cyan)}
   .vide{color:var(--sourd);padding:36px;text-align:center}
@@ -58,7 +77,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous" id="maj"></span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-18.2</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -67,10 +86,21 @@
     <div class="bloc-titre">
       <h2>Journée de livraison J+1</h2>
       <label for="jour">Journée</label>
-      <select id="jour"></select>
+      <span class="jour-nav"><button class="fleche" type="button" data-nav="jour" data-sens="-1" title="Jour précédent">‹</button><select id="jour"></select><button class="fleche" type="button" data-nav="jour" data-sens="1" title="Jour suivant">›</button></span>
       <span class="note" id="note-batterie">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</span>
     </div>
     <div class="note" id="note-turpe"></div>
+    <details class="methode" style="margin-top:10px">
+      <summary>Méthode : ce que mesure chaque chiffre</summary>
+      <dl>
+        <dt>Contraintes</dt><dd>SoC entre 5 et 95 % en permanence, rendement aller-retour 95 %, 2 cycles complets par jour au maximum (1 cycle = 450 kWh déchargés), 250 kW partagés entre marché et réserve. La journée se termine au SoC où elle a commencé, pour ne compter aucune énergie gratuite. TURPE CU4 sur chaque kWh soutiré, zéro à l'injection.</dd>
+        <dt>Optimum information parfaite</dt><dd>Le plafond. Achats et ventes DA au pas 15 min et réserves aFRR hausse/baisse par bloc d'une heure, choisis ensemble en connaissant tous les prix de la journée. Irréaliste sur un point : les réserves aFRR se déposent à 9h en J−1, trois heures avant que le DA ne soit connu. Sert à mesurer l'écart, pas à piloter.</dd>
+        <dt>DA seul</dt><dd>Même calcul sans aucune réserve : la batterie ne fait que de l'arbitrage day-ahead. Atteignable.</dd>
+        <dt>aFRR seul</dt><dd>Même calcul sans aucun échange DA : la batterie ne fait que vendre de la capacité aFRR. Atteignable en capacité, mais les activations réelles la déséquilibrent (voir ex post).</dd>
+        <dt>Réaliste, règle de 9h</dt><dd>La séquence vraie. À 9h J−1, une règle fixe dépose des offres : baisse sur certaines plages, hausse sur d'autres, une part de la puissance, un prix plancher. On constate ensuite sur le prix marginal publié où l'offre aurait été retenue (payée au marginal), puis on optimise le DA à 12h avec ces réserves figées. Aucune prévision : la règle ne regarde pas le DA. Atteignable ; c'est le chiffre à opposer à un agrégateur. Règle en vigueur affichée dans le bloc ex post et modifiable dans config/parametres.json.</dd>
+        <dt>Complément ex post</dt><dd>Une fois la journée livrée, on estime l'énergie réellement activée sur les MW réservés : part activée = taux national (volume activé / besoin RTE) par pas 15 min, prix = prix moyens pondérés RTE, convention des Règles de marché (à la baisse le fournisseur paie si le prix est positif, à la hausse il est payé). Les activations qui feraient sortir le SoC de 5-95 % ou dépasser 2 cycles sont supposées refusées par le prix d'offre en énergie et comptées à part. Provisoire tant que les 96 pas ne sont pas publiés.</dd>
+      </dl>
+    </details>
   </div>
 
   <div class="tuiles">
@@ -80,7 +110,6 @@
     <div class="tuile" style="--coul:var(--orange)"><div class="lib">Stratégie réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real">€/MW/jour net TURPE</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, optimum</div><div class="val" id="t-opt">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, DA seul</div><div class="val" id="t-da">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
-    <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, aFRR seul</div><div class="val" id="t-afrr">—</div><div class="sub">€/MW/jour, hors activations (voir ex post)</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, réaliste</div><div class="val" id="t-real">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">DA min</div><div class="val" id="k-da-min">—</div><div class="sub">€/MWh</div></div>
     <div class="tuile" style="--coul:var(--jaune)"><div class="lib">DA max</div><div class="val" id="k-da-max">—</div><div class="sub">€/MWh</div></div>
@@ -141,7 +170,7 @@
     <div class="graphe"><canvas id="g-afrr"></canvas></div><div class="vide" id="vide-afrr" hidden></div>
   </div>
 
-  <div class="bloc">
+  <div class="bloc plan">
     <div class="bloc-titre">
       <h2>Plan de la batterie</h2>
       <label><input type="radio" name="strat" value="optimum" checked> Optimum</label>
@@ -155,11 +184,13 @@
     <div class="graphe"><canvas id="g-plan"></canvas></div><div class="vide" id="vide-plan" hidden></div>
   </div>
 
-  <div class="bloc deux">
+  <hr class="separateur" data-label="Analyse des activations aFRR énergie, données passées">
+
+  <div class="bloc deux energie">
     <div class="bloc-titre">
       <h2>Activations aFRR énergie, journée passée</h2>
       <label for="jour-energie">Journée</label>
-      <select id="jour-energie"></select>
+      <span class="jour-nav"><button class="fleche" type="button" data-nav="jour-energie" data-sens="-1" title="Jour précédent">‹</button><select id="jour-energie"></select><button class="fleche" type="button" data-nav="jour-energie" data-sens="1" title="Jour suivant">›</button></span>
       <span class="unite">MW et €/MWh · pas 15 min</span>
       <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
     </div>
@@ -292,6 +323,12 @@ function dessinerPlan(){
   });
 }
 document.querySelectorAll('input[name="strat"]').forEach(r => r.addEventListener("change", dessinerPlan));
+document.querySelectorAll(".fleche[data-nav]").forEach(b => b.addEventListener("click", () => {
+  const s = document.getElementById(b.dataset.nav);
+  const i = s.selectedIndex - Number(b.dataset.sens);      // options triées du plus récent au plus ancien
+  if(i < 0 || i >= s.options.length) return;
+  s.selectedIndex = i; s.dispatchEvent(new Event("change"));
+}));
 document.querySelectorAll('#ida-cases input[type="checkbox"]').forEach(cb => cb.addEventListener("change", () => {
   if(!graphe) return;
   graphe.data.datasets.forEach((d, i) => { if(d.serie === cb.dataset.serie) graphe.setDatasetVisibility(i, cb.checked); });
@@ -302,7 +339,7 @@ async function chargerResultats(jour){
   const vide = document.getElementById("vide-plan");
   if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
   resultatsCourants = null;
-  for(const id of ["v-opt","v-da","v-afrr","v-real","t-opt","t-da","t-afrr","t-real","x-opt","x-da","x-real","x-afrr"]) txt(id, "—");
+  for(const id of ["v-opt","v-da","v-afrr","v-real","t-opt","t-da","t-real","x-opt","x-da","x-real","x-afrr"]) txt(id, "—");
   for(const id of ["s-opt","s-da","s-afrr","s-real"]) txt(id, "€/MW/jour net TURPE");
   for(const id of ["xs-opt","xs-real","xs-afrr"]) txt(id, "€/MW/jour total net");
   try{
@@ -313,7 +350,7 @@ async function chargerResultats(jour){
     const met = (id, sid, o, detail) => {
       if(!o || o.erreur){ txt(id, "—"); txt(sid, o && o.erreur ? "calcul impossible : " + o.erreur : "€/MW/jour"); return; }
       txt(id, fmt(o.net_eur_par_mw, 0));
-      txt(id.replace("v-", "t-"), fmt(o.turpe_eur / res.puissance_mw, 0));
+      const tid = id.replace("v-", "t-"); if(document.getElementById(tid)) txt(tid, fmt(o.turpe_eur / res.puissance_mw, 0));
       txt(sid, `€/MW/jour net TURPE · brut ${fmt(o.brut_eur_par_mw,0)} · ${detail(o)}`);
     };
     met("v-opt", "s-opt", res.optimum, o => `DA ${fmt(o.da_brut_eur/res.puissance_mw,0)}, aFRR ↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)}, TURPE ${fmt(o.turpe_eur/res.puissance_mw,0)}, ${fmt(o.cycles,2)} cycles`);

@@ -69,14 +69,25 @@
     <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt">€/MW/jour net TURPE</div></div>
     <div class="tuile" style="--coul:var(--cyan)"><div class="lib">Stratégie DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da">€/MW/jour net TURPE</div></div>
     <div class="tuile" style="--coul:var(--vert)"><div class="lib">Stratégie aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr">€/MW/jour net TURPE</div></div>
+    <div class="tuile" style="--coul:var(--orange)"><div class="lib">Stratégie réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real">€/MW/jour net TURPE</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, optimum</div><div class="val" id="t-opt">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, DA seul</div><div class="val" id="t-da">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
-    <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, aFRR seul</div><div class="val" id="t-afrr">—</div><div class="sub">€/MW/jour, nul tant que les activations ne sont pas modélisées</div></div>
+    <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, aFRR seul</div><div class="val" id="t-afrr">—</div><div class="sub">€/MW/jour, hors activations (voir ex post)</div></div>
+    <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, réaliste</div><div class="val" id="t-real">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">DA min</div><div class="val" id="k-da-min">—</div><div class="sub">€/MWh</div></div>
     <div class="tuile" style="--coul:var(--jaune)"><div class="lib">DA max</div><div class="val" id="k-da-max">—</div><div class="sub">€/MWh</div></div>
     <div class="tuile" style="--coul:var(--rose)"><div class="lib">Spread DA 2h</div><div class="val" id="k-da-spread">—</div><div class="sub">€/MWh, 2 h les plus chères moins 2 h les moins chères</div></div>
     <div class="tuile" style="--coul:var(--violet)"><div class="lib">aFRR baisse, moyenne</div><div class="val" id="k-afrr-down">—</div><div class="sub">€/MW/h sur la journée</div></div>
     <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR hausse, moyenne</div><div class="val" id="k-afrr-up">—</div><div class="sub">€/MW/h sur la journée</div></div>
+  </div>
+
+  <div class="bloc" id="bloc-expost">
+    <div class="bloc-titre"><h2>Complément aFRR énergie ex post, journée livrée</h2><span class="note" id="note-expost">Calculé une fois les activations de la journée publiées en totalité. Part activée = taux national, prix moyens pondérés RTE.</span></div>
+    <div class="tuiles" style="margin-bottom:0">
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt">€/MW/jour total net</div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real">€/MW/jour total net</div></div>
+      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr">€/MW/jour total net</div></div>
+    </div>
   </div>
 
   <div class="bloc">
@@ -95,6 +106,7 @@
       <label><input type="radio" name="strat" value="optimum" checked> Optimum</label>
       <label><input type="radio" name="strat" value="da_seul"> DA seul</label>
       <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
+      <label><input type="radio" name="strat" value="realiste"> Réaliste</label>
       <span class="note">Énergie planifiée : marché DA uniquement. L'aFRR est une puissance réservée, l'énergie activée est estimée ex post.</span>
       <span class="unite">kW et SoC % · pas 15 min</span>
       <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
@@ -172,7 +184,7 @@ async function chargerDA(jour){
 }
 
 let graphePlan = null, resultatsCourants = null, capaciteKwh = 500;
-const stratLabel = {optimum:"optimum", da_seul:"DA seul", afrr_seul:"aFRR seul"};
+const stratLabel = {optimum:"optimum", da_seul:"DA seul", afrr_seul:"aFRR seul", realiste:"réaliste, règle de 9h"};
 
 function dessinerPlan(){
   const vide = document.getElementById("vide-plan");
@@ -192,7 +204,8 @@ function dessinerPlan(){
       {type:"bar", label:"Injection DA, vente sur le marché (kW)", data:plan.map(p => p.injection_kw), backgroundColor:"rgba(34,211,238,.7)", yAxisID:"y", stack:"p"},
       {type:"line", label:"Réserve aFRR baisse, capacité (kW)", data:plan.map(p => -p.reserve_baisse_kw), borderColor:couleur("--baisse"), borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
       {type:"line", label:"Réserve aFRR hausse, capacité (kW)", data:plan.map(p => p.reserve_hausse_kw), borderColor:couleur("--hausse"), borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
-      {type:"line", label:"SoC (%)", data:socPct, borderColor:couleur("--jaune"), borderWidth:2, pointRadius:0, yAxisID:"y2"}]},
+      {type:"line", label:"SoC planifié (%)", data:socPct, borderColor:couleur("--jaune"), borderWidth:2, pointRadius:0, yAxisID:"y2"},
+      ...(res.ex_post && res.ex_post[strat] ? [{type:"line", label:"SoC réel avec activations estimées (%)", data:res.ex_post[strat].soc_reel_kwh.map(v => 100*v/capaciteKwh), borderColor:couleur("--rouge"), borderWidth:1.5, borderDash:[2,3], pointRadius:0, yAxisID:"y2"}] : [])]},
     options:{responsive:true, plugins:{legend:{position:"bottom"}, title:{display:true, text:`Stratégie : ${stratLabel[strat]}`, color:"#c9d1d9", font:{weight:"normal"}},
       tooltip:{callbacks:{
         label: ctx => {
@@ -202,14 +215,15 @@ function dessinerPlan(){
             case 1: return v ? `Injection DA : ${fmt(v,0)} kW, vendu ${fmt(p.prix_da,1)} €/MWh` : "Injection DA : 0";
             case 2: return `Réserve aFRR baisse : ${fmt(v,0)} kW (capacité)`;
             case 3: return `Réserve aFRR hausse : ${fmt(v,0)} kW (capacité)`;
-            case 4: return `SoC : ${fmt(ctx.parsed.y,1)} % (${fmt(p.soc_kwh,0)} kWh)`;
+            case 4: return `SoC planifié : ${fmt(ctx.parsed.y,1)} % (${fmt(p.soc_kwh,0)} kWh)`;
+            case 5: return `SoC réel estimé : ${fmt(ctx.parsed.y,1)} %`;
           }
         },
         footer: items => { const p = plan[items[0].dataIndex]; return `Résultat DA du pas : ${fmt(revenuPas(p),2)} €`; }
       }}},
       scales:{x:{...grille, stacked:true, ticks:{maxTicksLimit:12}},
               y:{...grille, stacked:true, title:{display:true,text:"kW, soutirage et réserve baisse en négatif"}},
-              y2:{position:"right", grid:{drawOnChartArea:false}, min:0, max:100, title:{display:true,text:"SoC %"}}}}
+              y2:{position:"right", grid:{drawOnChartArea:false}, suggestedMin:0, suggestedMax:100, title:{display:true,text:"SoC %"}}}}
   });
 }
 document.querySelectorAll('input[name="strat"]').forEach(r => r.addEventListener("change", dessinerPlan));
@@ -218,8 +232,9 @@ async function chargerResultats(jour){
   const vide = document.getElementById("vide-plan");
   if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
   resultatsCourants = null;
-  for(const id of ["v-opt","v-da","v-afrr","t-opt","t-da","t-afrr"]) txt(id, "—");
-  for(const id of ["s-opt","s-da","s-afrr"]) txt(id, "€/MW/jour net TURPE");
+  for(const id of ["v-opt","v-da","v-afrr","v-real","t-opt","t-da","t-afrr","t-real","x-opt","x-real","x-afrr"]) txt(id, "—");
+  for(const id of ["s-opt","s-da","s-afrr","s-real"]) txt(id, "€/MW/jour net TURPE");
+  for(const id of ["xs-opt","xs-real","xs-afrr"]) txt(id, "€/MW/jour total net");
   try{
     const r = await fetch(`data/resultats/${jour}.json`, {cache:"no-store"});
     if(!r.ok){ vide.hidden=false; vide.textContent="Pas encore de calcul pour cette journée."; return; }
@@ -234,7 +249,15 @@ async function chargerResultats(jour){
     met("v-opt", "s-opt", res.optimum, o => `DA ${fmt(o.da_brut_eur/res.puissance_mw,0)}, aFRR ↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)}, TURPE ${fmt(o.turpe_eur/res.puissance_mw,0)}, ${fmt(o.cycles,2)} cycles`);
     met("v-da", "s-da", res.da_seul, o => `TURPE ${fmt(o.turpe_eur/res.puissance_mw,0)} €/MW, ${fmt(o.cycles,2)} cycles`);
     met("v-afrr", "s-afrr", res.afrr_seul, o => `↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)} €/MW`);
+    met("v-real", "s-real", res.realiste, o => `DA ${fmt(o.da_brut_eur/res.puissance_mw,0)}, aFRR ↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)}, ${o.regle ? o.regle.blocs_baisse_retenus + " h ↓ / " + o.regle.blocs_hausse_retenus + " h ↑ retenues" : ""}, ${fmt(o.cycles,2)} cycles`);
     if(!res.afrr_disponible) txt("s-afrr", "prix aFRR capacité non collectés pour cette journée");
+    const xp = res.ex_post || {};
+    const metX = (id, sid, k) => {
+      const v = xp[k]; if(!v){ txt(sid, "en attente des activations complètes de la journée"); return; }
+      txt(id, fmt(v.total_net_eur_par_mw, 0));
+      txt(sid, `€/MW/jour total net · complément énergie ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)} (↑ ${fmt(v.energie_hausse_kwh,0)} kWh, ↓ ${fmt(v.energie_baisse_kwh,0)} kWh), ${fmt(v.cycles_reels,2)} cycles réels${v.alertes.length ? " · ALERTE : " + v.alertes.join(" ; ") : ""}`);
+    };
+    metX("x-opt", "xs-opt", "optimum"); metX("x-real", "xs-real", "realiste"); metX("x-afrr", "xs-afrr", "afrr_seul");
     dessinerPlan();
   }catch(e){ vide.hidden=false; vide.textContent="Erreur résultats : " + e.message; }
 }
@@ -315,6 +338,8 @@ function remplir(select, jours){
     const b = cfg.batterie, t = cfg.turpe, s = t.soutirage_eur_mwh;
     capaciteKwh = b.capacite_kwh;
     txt("note-batterie", `Batterie de référence ${b.puissance_kw} kW / ${b.capacite_kwh} kWh, SoC ${b.soc_min*100}-${b.soc_max*100} %, rendement ${b.rendement_aller_retour*100} %, ${b.cycles_max_par_jour} cycles/jour`);
+    const R = cfg.strategie_realiste;
+    if(R) txt("note-expost", `Règle de 9h : baisse ${R.baisse.plages.map(p=>p.join("-")).join(", ")} à ${R.baisse.part_puissance*100} % de la puissance, plancher ${R.baisse.prix_plancher_eur_mw_h} €/MW/h ; hausse ${R.hausse.plages.map(p=>p.join("-")).join(", ")} à ${R.hausse.part_puissance*100} %, plancher ${R.hausse.prix_plancher_eur_mw_h} €/MW/h. Ex post : part activée = taux national, prix moyens pondérés RTE, convention RM chap. 4 (à la baisse le fournisseur paie si le prix est positif).`);
     txt("note-turpe", `TURPE de référence : BT > 36 kVA, option ${t.option}, soutirage HPH ${s.HPH} / HCH ${s.HCH} / HPB ${s.HPB} / HCB ${s.HCB} €/MWh, injection ${t.injection_eur_mwh} €/MWh. Heures creuses ${t.heures_creuses}, saison haute novembre à mars. Composantes fixes exclues. Hypothèses à confirmer : ${t.hypotheses_a_confirmer.join(", ")}.`);
   }catch(e){ txt("note-turpe", "config/parametres.json introuvable."); }
   try{

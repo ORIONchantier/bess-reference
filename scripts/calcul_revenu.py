@@ -25,7 +25,7 @@ CYCLES = B["cycles_max_par_jour"]
 K = B.get("facteur_marge_afrr_k", 1.0)
 BLOC = CFG.get("afrr", {}).get("bloc_reservation_min", 60)
 DT = 0.25                                                               # h par pas
-VERSION = 2                                                             # incrémenter force le recalcul des jours anciens
+VERSION = 3                                                             # incrémenter force le recalcul des jours anciens
 
 
 def instant(iso: str) -> int:
@@ -55,7 +55,8 @@ def charger_jour(jour: str):
     return da, prix_cap
 
 
-def optimiser(da, prix_cap, avec_da=True, avec_afrr=True):
+def optimiser(da, prix_cap, avec_da=True, avec_afrr=True, reserves_fixes=None):
+    """reserves_fixes : (ru_kw par bloc, rd_kw par bloc) pour une stratégie dont les réserves sont décidées d'avance."""
     n = len(da)
     if n == 0:
         return None
@@ -129,9 +130,14 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True):
         bvec[i] = rhs
     bounds = [(0, P_KW if avec_da else 0)] * (2 * n) + [(SOC_MIN, SOC_MAX)] + \
              [(0, P_KW if afrr_ok else 0)] * (2 * nb)
+    if reserves_fixes is not None:
+        ru_f, rd_f = reserves_fixes
+        for b in range(nb):
+            bounds[i_ru + b] = (ru_f[b], ru_f[b])
+            bounds[i_rd + b] = (rd_f[b], rd_f[b])
     res = linprog(cost, A_ub=A.tocsr(), b_ub=bvec, bounds=bounds, method="highs")
     if not res.success:
-        return {"erreur": res.message}
+        return {"erreur": res.message, "prix_bloc_hausse": p_up, "prix_bloc_baisse": p_dn}
     x = res.x
     c, d, s0 = x[ic:ic + n], x[idx_d:idx_d + n], x[i_s0]
     ru, rd = x[i_ru:i_ru + nb], x[i_rd:i_rd + nb]
@@ -144,6 +150,7 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True):
     brut = rev_da_brut + rev_up + rev_dn
     return {
         "blocs_afrr_raccordes": int(nb_raccordes), "blocs_total": 2 * nb,
+        "prix_bloc_hausse": p_up, "prix_bloc_baisse": p_dn, "pas_par_bloc": pas_par_bloc,
         "brut_eur": round(brut, 2), "net_eur": round(brut - cout_turpe, 2),
         "brut_eur_par_mw": round(brut / mw, 1), "net_eur_par_mw": round((brut - cout_turpe) / mw, 1),
         "da_brut_eur": round(rev_da_brut, 2), "turpe_eur": round(cout_turpe, 2),
@@ -157,6 +164,90 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True):
     }
 
 
+def dans_plages(t: dt.datetime, plages) -> bool:
+    hm = t.hour * 60 + t.minute
+    for a, b in plages:
+        ha, ma = map(int, a.split(":")); hb, mb = map(int, b.split(":"))
+        if ha * 60 + ma <= hm < hb * 60 + mb:
+            return True
+    return False
+
+
+def strategie_realiste(da, prix_cap):
+    """Règle d'offre de 9h (config) confrontée au prix marginal publié, puis DA optimisé avec les réserves retenues."""
+    R = CFG.get("strategie_realiste")
+    if not R or not prix_cap:
+        return None
+    sonde = optimiser(da, prix_cap, True, True)          # pour récupérer les prix par bloc
+    if not sonde or "prix_bloc_hausse" not in sonde:
+        return None
+    p_up, p_dn, ppb = sonde["prix_bloc_hausse"], sonde["prix_bloc_baisse"], sonde.get("pas_par_bloc", 4)
+    debuts = [dt.datetime.fromisoformat(p["debut"]).astimezone(PARIS) for p in da]
+    nb = len(p_up)
+    ru, rd = [0.0] * nb, [0.0] * nb
+    for b in range(nb):
+        t = debuts[b * ppb]
+        if dans_plages(t, R["hausse"]["plages"]) and p_up[b] >= R["hausse"]["prix_plancher_eur_mw_h"]:
+            ru[b] = P_KW * R["hausse"]["part_puissance"]
+        if dans_plages(t, R["baisse"]["plages"]) and p_dn[b] >= R["baisse"]["prix_plancher_eur_mw_h"]:
+            rd[b] = P_KW * R["baisse"]["part_puissance"]
+    out = optimiser(da, prix_cap, True, True, reserves_fixes=(ru, rd))
+    if out and "erreur" not in out:
+        out["regle"] = {"blocs_hausse_retenus": sum(1 for v in ru if v), "blocs_baisse_retenus": sum(1 for v in rd if v)}
+    return out
+
+
+def ex_post(jour: str, res: dict):
+    """Complément aFRR énergie une fois la journée livrée. Proxy : part activée = taux national par pas 15 min."""
+    path = DATA / "afrr_energie" / f"{jour}.json"
+    if not path.exists():
+        return None
+    en = json.loads(path.read_text())
+    if len(en) < 96:
+        return None                                       # journée incomplète, on attend
+    par_instant = {instant(e["debut"]): e for e in en}
+    utile = SOC_MAX - SOC_MIN
+    out = {}
+    for nom in ("optimum", "afrr_seul", "realiste"):
+        o = res.get(nom)
+        if not o or o.get("erreur") or not o.get("plan"):
+            continue
+        plan = o["plan"]
+        rev_up = cout_dn = turpe = e_up_tot = e_dn_tot = 0.0
+        soc = []; s_cur = o["soc_initial_kwh"]; manquants = 0
+        for pt in plan:
+            e = par_instant.get(instant(pt["debut"]))
+            if e is None:
+                manquants += 1; taux_up = taux_dn = 0.0; pu = pd = 0.0
+            else:
+                bu, bd = e.get("besoin_hausse_mw") or 0, abs(e.get("besoin_baisse_mw") or 0)
+                taux_up = min(1.0, (e.get("active_hausse_mw") or 0) / bu) if bu else 0.0
+                taux_dn = min(1.0, abs(e.get("active_baisse_mw") or 0) / bd) if bd else 0.0
+                pu, pd = e.get("prix_hausse_eur_mwh") or 0.0, e.get("prix_baisse_eur_mwh") or 0.0
+            e_up = pt["reserve_hausse_kw"] * taux_up * DT                # kWh injectés (activation hausse)
+            e_dn = pt["reserve_baisse_kw"] * taux_dn * DT                # kWh absorbés (activation baisse)
+            rev_up += e_up / 1000 * pu                                   # versé au fournisseur si positif (RM 4.M)
+            cout_dn += e_dn / 1000 * pd                                  # payé par le fournisseur si positif (RM 4.M)
+            turpe += e_dn / 1000 * pt["turpe"]
+            e_up_tot += e_up; e_dn_tot += e_dn
+            s_cur += (pt["soutirage_kw"] * DT + e_dn) * ETA - (pt["injection_kw"] * DT + e_up) / ETA
+            soc.append(round(s_cur, 1))
+        alertes = []
+        if min(soc) < SOC_MIN - 0.5: alertes.append(f"SoC réel sous 5 % ({min(soc):.0f} kWh) : plan DA infaisable avec ces activations")
+        if max(soc) > SOC_MAX + 0.5: alertes.append(f"SoC réel au-dessus de 95 % ({max(soc):.0f} kWh)")
+        cycles = (sum(p["injection_kw"] for p in plan) * DT + e_up_tot) / ETA / utile
+        if cycles > CYCLES + 1e-6: alertes.append(f"budget de cycles dépassé : {cycles:.2f}")
+        if manquants: alertes.append(f"{manquants} pas sans donnée d'activation")
+        mw = P_KW / 1000
+        net = rev_up - cout_dn - turpe
+        out[nom] = {"energie_hausse_kwh": round(e_up_tot, 1), "energie_baisse_kwh": round(e_dn_tot, 1),
+                    "revenu_hausse_eur": round(rev_up, 2), "cout_baisse_eur": round(cout_dn, 2), "turpe_eur": round(turpe, 2),
+                    "complement_net_eur": round(net, 2), "complement_net_eur_par_mw": round(net / mw, 1),
+                    "total_net_eur_par_mw": round(o["net_eur_par_mw"] + net / mw, 1),
+                    "cycles_reels": round(cycles, 3), "soc_reel_kwh": soc, "alertes": alertes}
+    return out or None
+
+
 def calculer(jour: str) -> dict:
     da, prix_cap = charger_jour(jour)
     out = {"jour": jour, "version": VERSION, "calcule_le": dt.datetime.now(PARIS).isoformat(timespec="minutes"),
@@ -164,6 +255,7 @@ def calculer(jour: str) -> dict:
     out["optimum"] = optimiser(da, prix_cap, True, True)
     out["da_seul"] = optimiser(da, prix_cap, True, False)
     out["afrr_seul"] = optimiser(da, prix_cap, False, True)
+    out["realiste"] = strategie_realiste(da, prix_cap)
     return out
 
 
@@ -187,9 +279,20 @@ def main():
         if r["afrr_disponible"] and not o.get("blocs_afrr_raccordes"):
             print(f"{j} : ATTENTION, prix aFRR présents mais aucun pas raccordé au DA (horodatages ?)")
         cible.write_text(json.dumps(r, ensure_ascii=False))
-        o = r["optimum"] or {}
+        rl = r.get("realiste") or {}
         print(f"{j} : optimum {o.get('net_eur_par_mw', '?')} €/MW net, DA seul {(r['da_seul'] or {}).get('net_eur_par_mw', '?')}, "
-              f"aFRR seul {(r['afrr_seul'] or {}).get('net_eur_par_mw', '?')}, cycles {o.get('cycles', '?')}")
+              f"aFRR seul {(r['afrr_seul'] or {}).get('net_eur_par_mw', '?')}, réaliste {rl.get('net_eur_par_mw', rl.get('erreur', '?'))}, cycles {o.get('cycles', '?')}")
+    # passe ex post : journées livrées dont les activations sont complètes
+    for cible in sorted((DATA / "resultats").glob("????-??-??.json")):
+        r = json.loads(cible.read_text())
+        if r.get("ex_post") or r.get("version") != VERSION:
+            continue
+        xp = ex_post(cible.stem, r)
+        if xp:
+            r["ex_post"] = xp
+            cible.write_text(json.dumps(r, ensure_ascii=False))
+            print(f"{cible.stem} : ex post énergie, optimum {xp.get('optimum', {}).get('complement_net_eur_par_mw', '?')} €/MW, "
+                  f"réaliste {xp.get('realiste', {}).get('complement_net_eur_par_mw', '?')} €/MW")
     idx_path = DATA / "index.json"
     idx = json.loads(idx_path.read_text()) if idx_path.exists() else {}
     idx["resultats"] = sorted(p.stem for p in (DATA / "resultats").glob("????-??-??.json"))

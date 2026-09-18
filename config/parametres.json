@@ -40,5 +40,32 @@
   "afrr": {
     "bloc_reservation_min": 60,
     "note": "réservation décidée par bloc d'une heure ; prix du bloc = moyenne des pas 15 min"
+  },
+  "strategie_realiste": {
+    "description": "Règle d'offre déposée à 9h J-1 sans connaître le DA : plages, part de la puissance offerte, prix plancher. Retenue si le prix marginal publié est >= plancher, payée au marginal. Le DA est ensuite optimisé avec ces réserves figées.",
+    "baisse": {
+      "plages": [
+        [
+          "10:00",
+          "17:00"
+        ]
+      ],
+      "part_puissance": 0.5,
+      "prix_plancher_eur_mw_h": 5
+    },
+    "hausse": {
+      "plages": [
+        [
+          "18:00",
+          "22:00"
+        ]
+      ],
+      "part_puissance": 0.5,
+      "prix_plancher_eur_mw_h": 5
+    }
+  },
+  "ex_post": {
+    "description": "Complément aFRR énergie calculé une fois la journée livrée : part activée = taux national (volume activé / besoin RTE) appliqué aux MW réservés ; prix = prix moyen pondéré publié. Convention RM chap. 4 : à la baisse un prix positif est payé par le fournisseur de réserve, à la hausse il lui est versé. TURPE appliqué à l'énergie absorbée.",
+    "proxy_part_activee": "taux_national"
   }
 }

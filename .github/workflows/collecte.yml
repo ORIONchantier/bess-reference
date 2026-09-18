@@ -2,13 +2,10 @@ name: Collecte RTE quotidienne
 
 on:
   schedule:
-    # RTE bascule sur J+1 entre 13h et 14h Paris (guide Wholesale Market v3). On appelle après 14h.
-    # GitHub utilise l'heure UTC : 12:10 UTC = 14:10 Paris en été ; 13:10 UTC = 14:10 Paris en hiver.
-    # Deux passages plus une relance chacun ; le script est sans effet s'il a déjà la journée.
-    - cron: "10 12 * * *"
-    - cron: "40 12 * * *"
-    - cron: "10 13 * * *"
-    - cron: "40 13 * * *"
+    # Toutes les deux heures, à la 10e minute (heure UTC, soit 2h10, 4h10 ... 22h10 Paris en été, décalé d'une heure en hiver).
+    # Avant 14h Paris, le DA renvoyé est celui du jour (déjà stocké) et le script sort en code 2 : sans conséquence.
+    # Après 14h, le DA de J+1 est pris ; l'aFRR capacité de J+1 dès 9h30 ; les activations aFRR se complètent au fil de la journée.
+    - cron: "10 */2 * * *"
   workflow_dispatch:        # bouton "Run workflow" pour lancer à la main
 
 permissions:

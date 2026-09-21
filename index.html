@@ -69,7 +69,8 @@
   .methode dt{color:var(--jaune);font-weight:700;white-space:nowrap}
   .methode dd{margin:0;color:var(--texte)}
   .racc{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
-  .racc + .sous{margin-left:16px}
+  .bloc.commande{background:#0e1a24;border:2px solid var(--cyan);margin-bottom:24px}
+  .bloc.commande + .tuiles, .bloc.commande + .bloc{margin-top:0}
   .racc-btn{font:inherit;font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--sourd);background:#0f1522;border:1px solid var(--bord);padding:7px 14px;cursor:pointer}
   .racc-btn:first-of-type{border-radius:4px 0 0 4px}.racc-btn:last-of-type{border-radius:0 4px 4px 0;margin-left:-1px}
   .racc-btn.actif{color:#0b0e14;background:var(--jaune);border-color:var(--jaune)}
@@ -86,25 +87,25 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="racc" title="Type de raccordement de la batterie étudiée">
-    <label>Raccordement</label>
-    <button type="button" class="racc-btn" data-racc="BT">BT</button><button type="button" class="racc-btn" data-racc="HTA">HTA</button>
-    <select id="site-hta" hidden></select>
-    <button type="button" class="bouton" id="sites-importer" hidden title="Remplace data/reference/sites.csv par votre fichier">Importer mes sites</button>
-    <input type="file" id="sites-fichier" accept=".csv,text/csv" hidden>
-  </span>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.2</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.3</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
 
-  <div class="bloc">
-    <div class="bloc-titre">
+  <div class="bloc commande">
+    <div class="bloc-titre" style="margin-bottom:0">
       <h2>Journée de livraison J+1</h2>
       <label for="jour">Journée</label>
       <span class="jour-nav"><button class="fleche" type="button" data-nav="jour" data-sens="-1" title="Jour précédent">‹</button><select id="jour"></select><button class="fleche" type="button" data-nav="jour" data-sens="1" title="Jour suivant">›</button></span>
-      <span class="note" id="note-batterie">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</span>
+      <span class="racc" title="Type de raccordement de la batterie étudiée">
+        <label>Raccordement</label>
+        <button type="button" class="racc-btn" data-racc="BT">BT</button><button type="button" class="racc-btn" data-racc="HTA">HTA</button>
+        <select id="site-hta" hidden></select>
+        <button type="button" class="bouton" id="sites-importer" hidden title="Remplace data/reference/sites.csv par votre fichier">Importer mes sites</button>
+        <input type="file" id="sites-fichier" accept=".csv,text/csv" hidden>
+      </span>
     </div>
+    <div class="note" id="note-batterie" style="margin-top:10px">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</div>
     <div class="note" id="note-tarif" style="color:var(--jaune)"></div>
     <details class="methode" style="margin-top:6px">
       <summary>Paramètres TURPE et hypothèses</summary>
@@ -116,9 +117,9 @@
         <dt>Contraintes</dt><dd>SoC entre 5 et 95 % en permanence, rendement aller-retour 95 %, 2 cycles complets par jour au maximum (1 cycle = 450 kWh déchargés), 250 kW partagés entre marché et réserve. La journée se termine au SoC où elle a commencé, pour ne compter aucune énergie gratuite. TURPE CU4 sur chaque kWh soutiré, zéro à l'injection.</dd>
         <dt>Optimum information parfaite</dt><dd>Le plafond. Achats et ventes DA au pas 15 min et réserves aFRR hausse/baisse par bloc d'une heure, choisis ensemble en connaissant tous les prix de la journée. Irréaliste sur un point : les réserves aFRR se déposent à 9h en J−1, trois heures avant que le DA ne soit connu. Sert à mesurer l'écart, pas à piloter.</dd>
         <dt>DA seul</dt><dd>Même calcul sans aucune réserve : la batterie ne fait que de l'arbitrage day-ahead. Atteignable.</dd>
-        <dt>aFRR seul</dt><dd>Même calcul sans aucun échange DA : la batterie ne fait que vendre de la capacité aFRR. Atteignable en capacité, mais les activations réelles la déséquilibrent (voir ex post).</dd>
-        <dt>Réaliste, règle de 9h</dt><dd>La séquence vraie. À 9h J−1, une règle fixe dépose des offres : baisse sur certaines plages, hausse sur d'autres, une part de la puissance, un prix plancher. On constate ensuite sur le prix marginal publié où l'offre aurait été retenue (payée au marginal), puis on optimise le DA à 12h avec ces réserves figées. Aucune prévision : la règle ne regarde pas le DA. Atteignable ; c'est le chiffre à opposer à un agrégateur. Règle en vigueur affichée dans le bloc ex post et modifiable dans config/parametres.json.</dd>
-        <dt>Complément ex post</dt><dd>Une fois la journée livrée, on estime l'énergie réellement activée sur les MW réservés : part activée = taux national (volume activé / besoin RTE) par pas 15 min, prix = prix moyens pondérés RTE, convention des Règles de marché (à la baisse le fournisseur paie si le prix est positif, à la hausse il est payé). Les activations qui feraient sortir le SoC de 5-95 % ou dépasser 2 cycles sont supposées refusées par le prix d'offre en énergie et comptées à part. Provisoire tant que les 96 pas ne sont pas publiés.</dd>
+        <dt>aFRR seul</dt><dd>Même calcul sans aucun échange DA : la batterie ne fait que vendre de la capacité aFRR. Atteignable en capacité, mais les activations réelles la déséquilibrent (voir la rangée « avec énergie activée »).</dd>
+        <dt>Réaliste, règle de 9h</dt><dd>La séquence vraie. À 9h J−1, une règle fixe dépose des offres : baisse sur certaines plages, hausse sur d'autres, une part de la puissance, un prix plancher. On constate ensuite sur le prix marginal publié où l'offre aurait été retenue (payée au marginal), puis on optimise le DA à 12h avec ces réserves figées. Aucune prévision : la règle ne regarde pas le DA. Atteignable ; c'est le chiffre à opposer à un agrégateur. Règle en vigueur affichée dans le bloc des revenus et modifiable dans config/parametres.json.</dd>
+        <dt>Énergie activée</dt><dd>Une fois la journée livrée, on estime l'énergie réellement activée sur les MW réservés : part activée = taux national (volume activé / besoin RTE) par pas 15 min, prix = prix moyens pondérés RTE, convention des Règles de marché (à la baisse le fournisseur paie si le prix est positif, à la hausse il est payé). Les activations qui feraient sortir le SoC de 5-95 % ou dépasser 2 cycles sont supposées refusées par le prix d'offre en énergie et comptées à part. Provisoire tant que les 96 pas ne sont pas publiés.</dd>
       </dl>
     </details>
   </div>
@@ -132,7 +133,7 @@
       <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr">€/MW/jour net TURPE</div></div>
       <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real">€/MW/jour net TURPE</div></div>
     </div>
-    <div class="rangee-lib">Avec l'énergie aFRR activée, estimée ex post une fois la journée livrée</div>
+    <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées)</div>
     <div class="tuiles quatre" style="margin-bottom:0">
       <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt">€/MW/jour total net</div></div>
       <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">identique : aucune réserve, donc aucune activation</div></div>
@@ -142,7 +143,6 @@
   </div>
 
   <div class="tuiles">
-    <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, optimum</div><div class="val" id="t-opt">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, DA seul</div><div class="val" id="t-da">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, réaliste</div><div class="val" id="t-real">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">DA min</div><div class="val" id="k-da-min">—</div><div class="sub">€/MWh</div></div>
@@ -212,7 +212,7 @@
       <label><input type="radio" name="strat" value="da_seul"> DA seul</label>
       <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
       <label><input type="radio" name="strat" value="realiste"> Réaliste</label>
-      <span class="note">Énergie planifiée : marché DA uniquement. L'aFRR est une puissance réservée, l'énergie activée est estimée ex post.</span>
+      <span class="note">Énergie planifiée : marché DA uniquement. L'aFRR est une puissance réservée, l'énergie activée est estimée a posteriori.</span>
       <span class="unite">kW et SoC % · pas 15 min</span>
       <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
     </div>
@@ -240,7 +240,7 @@
     <div class="graphe"><canvas id="g-prix-en"></canvas></div>
   </div>
 
-  <footer>Prix day-ahead : données EPEX SPOT SE et Nord Pool AS, propriété exclusive de ces bourses, obtenues via l'API Wholesale Market de RTE (data.rte-france.com). Usage interne Orion Energies uniquement. aFRR : RTE, API Balancing Capacity et Balancing Energy. Revenus de référence : optimisation linéaire à information parfaite (scripts/calcul_revenu.py), paramètres dans config/parametres.json. Le complément aFRR énergie ex post n'est pas encore inclus.</footer>
+  <footer>Prix day-ahead : données EPEX SPOT SE et Nord Pool AS, propriété exclusive de ces bourses, obtenues via l'API Wholesale Market de RTE (data.rte-france.com). Usage interne Orion Energies uniquement. aFRR : RTE, API Balancing Capacity et Balancing Energy. Revenus de référence : optimisation linéaire à information parfaite (scripts/calcul_revenu.py), paramètres dans config/parametres.json. Énergie aFRR activée estimée a posteriori.</footer>
 </main>
 
 <script>
@@ -407,7 +407,7 @@ async function chargerResultats(jour){
   const vide = document.getElementById("vide-plan");
   if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
   resultatsCourants = null;
-  for(const id of ["v-opt","v-da","v-afrr","v-real","t-opt","t-da","t-real","x-opt","x-da","x-real","x-afrr"]) txt(id, "—");
+  for(const id of ["v-opt","v-da","v-afrr","v-real","t-da","t-real","x-opt","x-da","x-real","x-afrr"]) txt(id, "—");
   for(const id of ["s-opt","s-da","s-afrr","s-real"]) txt(id, "€/MW/jour net TURPE");
   for(const id of ["xs-opt","xs-real","xs-afrr"]) txt(id, "€/MW/jour total net");
   try{
@@ -437,6 +437,7 @@ async function chargerResultats(jour){
       txt(sid, `€/MW/jour ${v.partiel ? "provisoire, " + v.pas_couverts + "/96 pas publiés" : "total net"} · complément énergie ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)} (↑ ${fmt(v.energie_hausse_kwh,0)} kWh, ↓ ${fmt(v.energie_baisse_kwh,0)} kWh) · refusé par le prix pour tenir SoC et cycles : ↑ ${fmt(v.refusee_hausse_kwh,0)} kWh, ↓ ${fmt(v.refusee_baisse_kwh,0)} kWh · ${fmt(v.cycles_reels,2)} cycles · écart SoC fin de journée ${v.ecart_soc_fin_kwh >= 0 ? "+" : ""}${fmt(100*v.ecart_soc_fin_kwh/capaciteKwh,1)} pt${v.alertes.length ? " · " + v.alertes.join(" ; ") : ""}`);
     };
     metX("x-opt", "xs-opt", "optimum"); metX("x-real", "xs-real", "realiste"); metX("x-afrr", "xs-afrr", "afrr_seul");
+    if(xp.afrr_seul_100){ const v = xp.afrr_seul_100; document.getElementById("xs-afrr").textContent += ` · si nos offres en énergie sont retenues à 100 % : ${fmt(v.total_net_eur_par_mw,0)} €/MW (complément ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)}, ↑ ${fmt(v.energie_hausse_kwh,0)} kWh, ↓ ${fmt(v.energie_baisse_kwh,0)} kWh, refusé ↑ ${fmt(v.refusee_hausse_kwh,0)} ↓ ${fmt(v.refusee_baisse_kwh,0)} kWh, ${fmt(v.cycles_reels,2)} cycles)`; }
     if(res.da_seul && !res.da_seul.erreur) txt("x-da", fmt(res.da_seul.net_eur_par_mw, 0));
     dessinerPlan();
   }catch(e){ vide.hidden=false; vide.textContent="Erreur résultats : " + e.message; }
@@ -608,7 +609,7 @@ function remplir(select, jours){
     const H = cfg.turpe_hta;
     if(H) document.getElementById("note-turpe").insertAdjacentHTML("afterend", `<div class="note">TURPE HTA (courte utilisation, parties variables) : standard 5 plages pointe fixe ; zone soutirage : injection payée ${-H.grilles_c_eur_kwh.zone_soutirage.injection.POINTE*10} €/MWh à la pointe ; zone injection : soutirage payé ${-H.grilles_c_eur_kwh.zone_injection.soutirage.POINTE_INJ*10} €/MWh à la pointe d'injection, injection ${H.grilles_c_eur_kwh.zone_injection.injection.POINTE_INJ*10} €/MWh. Hypothèses à confirmer : ${H.hypotheses_a_confirmer.join(" ; ")}.</div>`);
     const R = cfg.strategie_realiste;
-    if(R) txt("note-expost", `Règle de 9h : baisse ${R.baisse.plages.map(p=>p.join("-")).join(", ")} à ${R.baisse.part_puissance*100} % de la puissance, plancher ${R.baisse.prix_plancher_eur_mw_h} €/MW/h ; hausse ${R.hausse.plages.map(p=>p.join("-")).join(", ")} à ${R.hausse.part_puissance*100} %, plancher ${R.hausse.prix_plancher_eur_mw_h} €/MW/h. Ex post : part activée = taux national, prix moyens pondérés RTE, convention RM chap. 4 (à la baisse le fournisseur paie si le prix est positif).`);
+    if(R) txt("note-expost", `Règle de 9h : baisse ${R.baisse.plages.map(p=>p.join("-")).join(", ")} à ${R.baisse.part_puissance*100} % de la puissance, plancher ${R.baisse.prix_plancher_eur_mw_h} €/MW/h ; hausse ${R.hausse.plages.map(p=>p.join("-")).join(", ")} à ${R.hausse.part_puissance*100} %, plancher ${R.hausse.prix_plancher_eur_mw_h} €/MW/h. Énergie activée : part = taux national, prix moyens pondérés RTE, convention RM chap. 4 (à la baisse le fournisseur paie si le prix est positif).`);
     txt("note-turpe", `TURPE de référence : BT > 36 kVA, option ${t.option}, soutirage HPH ${s.HPH} / HCH ${s.HCH} / HPB ${s.HPB} / HCB ${s.HCB} €/MWh, injection ${t.injection_eur_mwh} €/MWh. Heures creuses ${t.heures_creuses}, saison haute novembre à mars. Composantes fixes exclues. Hypothèses à confirmer : ${t.hypotheses_a_confirmer.join(", ")}.`);
   }catch(e){ txt("note-turpe", "config/parametres.json introuvable."); }
   try{

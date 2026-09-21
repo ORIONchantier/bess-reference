@@ -27,7 +27,7 @@ CYCLES = B["cycles_max_par_jour"]
 K = B.get("facteur_marge_afrr_k", 1.0)
 BLOC = CFG.get("afrr", {}).get("bloc_reservation_min", 60)
 DT = 0.25                                                               # h par pas
-VERSION = 5                                                             # incrémenter force le recalcul des jours anciens
+VERSION = 6                                                             # incrémenter force le recalcul des jours anciens
 
 
 def instant(iso: str) -> int:
@@ -207,8 +207,11 @@ def ex_post(jour: str, res: dict):
     couverts = sum(1 for p in res["optimum"]["plan"] if instant(p["debut"]) in par_instant) if res.get("optimum") and res["optimum"].get("plan") else len(en)
     utile = SOC_MAX - SOC_MIN
     out = {}
-    for nom in ("optimum", "afrr_seul", "realiste"):
-        o = res.get(nom)
+    for nom in ("optimum", "afrr_seul", "realiste", "afrr_seul_100"):
+        # afrr_seul_100 : mêmes réserves que aFRR seul, mais nos offres en énergie sont retenues à 100 % :
+        # dès que RTE active dans un sens, toute la puissance réservée est activée (borne haute de l'énergie).
+        plein = nom == "afrr_seul_100"
+        o = res.get("afrr_seul" if plein else nom)
         if not o or o.get("erreur") or not o.get("plan"):
             continue
         plan = o["plan"]
@@ -230,6 +233,9 @@ def ex_post(jour: str, res: dict):
                 bu, bd = e.get("besoin_hausse_mw") or 0, abs(e.get("besoin_baisse_mw") or 0)
                 taux_up = min(1.0, (e.get("active_hausse_mw") or 0) / bu) if bu else 0.0
                 taux_dn = min(1.0, abs(e.get("active_baisse_mw") or 0) / bd) if bd else 0.0
+                if plein:
+                    taux_up = 1.0 if (e.get("active_hausse_mw") or 0) > 0 else 0.0
+                    taux_dn = 1.0 if abs(e.get("active_baisse_mw") or 0) > 0 else 0.0
                 pu, pd = e.get("prix_hausse_eur_mwh") or 0.0, e.get("prix_baisse_eur_mwh") or 0.0
             d_up = pt["reserve_hausse_kw"] * taux_up * DT              # kWh demandés à la hausse (côté réseau)
             d_dn = pt["reserve_baisse_kw"] * taux_dn * DT              # kWh demandés à la baisse

@@ -102,7 +102,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.5</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.6</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -110,13 +110,14 @@
   <div class="bloc commande" id="bloc-commande">
     <div class="bloc-titre" style="margin-bottom:0;align-items:flex-start">
       <h2>Sélection</h2>
-      <div class="cal" id="cal">
+      <button type="button" class="bouton" id="cal-basculer">📅 <span id="cal-bouton-texte">Choisir les jours</span></button>
+      <div class="cal" id="cal" hidden>
         <div class="cal-tete"><button class="fleche" type="button" id="cal-prec">‹</button><span id="cal-mois"></span><button class="fleche" type="button" id="cal-suiv">›</button></div>
         <div class="cal-grille" id="cal-grille"></div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <span class="sel-resume" id="sel-resume">—</span>
-        <span class="note">Un clic sélectionne un jour, un second clic sur un autre jour sélectionne l'intervalle. Les jours cadrés sont ceux collectés.</span>
+        <span class="note" id="cal-aide" hidden>Un clic sélectionne un jour, un second clic sur un autre jour sélectionne l'intervalle. Les jours cadrés sont ceux collectés.</span>
         <span class="racc" style="margin-left:0" title="Type de raccordement de la batterie étudiée">
           <label>Raccordement</label>
           <button type="button" class="racc-btn" data-racc="BT">BT</button><button type="button" class="racc-btn" data-racc="HTA">HTA</button>
@@ -368,7 +369,13 @@ function cliquerJour(iso){
   else selection = {du: iso < selection.du ? iso : selection.du, au: iso > selection.du ? iso : selection.du};
   try{ localStorage.setItem("bess-selection", JSON.stringify(selection)); }catch(e){}
   dessinerCal(); rafraichir();
+  if(selection.du !== selection.au){ document.getElementById("cal").hidden = true; document.getElementById("cal-aide").hidden = true; txt("cal-bouton-texte", "Choisir les jours"); }
 }
+document.getElementById("cal-basculer").addEventListener("click", () => {
+  const c = document.getElementById("cal"), ouvert = c.hidden;
+  c.hidden = !ouvert; document.getElementById("cal-aide").hidden = !ouvert;
+  txt("cal-bouton-texte", ouvert ? "Fermer le calendrier" : "Choisir les jours");
+});
 document.getElementById("cal-prec").addEventListener("click", () => { calMois = new Date(calMois.getFullYear(), calMois.getMonth() - 1, 1); dessinerCal(); });
 document.getElementById("cal-suiv").addEventListener("click", () => { calMois = new Date(calMois.getFullYear(), calMois.getMonth() + 1, 1); dessinerCal(); });
 

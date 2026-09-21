@@ -170,5 +170,53 @@
       "postes_sources": "data/reference/postes_sources.csv",
       "sites": "data/reference/sites.csv"
     }
+  },
+  "decision": {
+    "heure_limite_j_moins_1": "08:45",
+    "note": "Heure à laquelle l'agent doit avoir décidé, pour un dépôt aFRR capacité avant 9h en J-1. Clôture de 9h donnée par l'utilisateur, article des Règles de marché RTE à citer. Toute donnée publiée après cette heure est interdite en entrée de l'agent."
+  },
+  "previsions": {
+    "note": "Production : guide Generation Forecast v03.01.01 (§4.1, GET /forecasts). Consommation : guide Consumption non fourni, chemin non vérifié. Le brut est stocké dans data/previsions/<jour>.raw.json, la date de mise à jour par série dans <jour>.meta.json.",
+    "ressources": {
+      "consommation_j1": {
+        "chemin": "consumption/v1/short_term",
+        "parametres": {
+          "type": "D-1"
+        },
+        "source": "non vérifié, guide Consumption à fournir"
+      },
+      "consommation_j2": {
+        "chemin": "consumption/v1/short_term",
+        "parametres": {
+          "type": "D-2"
+        },
+        "source": "non vérifié, guide Consumption à fournir"
+      },
+      "production": {
+        "chemin": "generation_forecast/v3/forecasts",
+        "parametres": {
+          "production_type": "SOLAR,WIND_ONSHORE,WIND_OFFSHORE",
+          "type": "D-2,D-1"
+        },
+        "source": "guide Generation Forecast v03.01.01 §4.1.1 : v3, filières WIND_ONSHORE / WIND_OFFSHORE / SOLAR, valeurs multiples séparées par une virgule, 21 jours maximum par appel, pas 15 min, updated_date par valeur"
+      }
+    },
+    "series": {
+      "consommation": {"ressource": "consommation_j1", "type": "D-1"},
+      "solaire": {"ressource": "production", "type": "D-1", "production_type": ["SOLAR"]},
+      "eolien": {"ressource": "production", "type": "D-1", "production_type": ["WIND_ONSHORE", "WIND_OFFSHORE"]},
+      "consommation_j2": {"ressource": "consommation_j2", "type": "D-2"},
+      "solaire_j2": {"ressource": "production", "type": "D-2", "production_type": ["SOLAR"]},
+      "eolien_j2": {"ressource": "production", "type": "D-2", "production_type": ["WIND_ONSHORE", "WIND_OFFSHORE"]}
+    },
+    "horaires_publication": "Guide Generation Forecast §4.1.1.1 : solaire et éolien J-1 à appeler vers 17h, échéance réglementaire 18h ; « courante » mise à jour vers 9h30 et 19h30. La prévision J-1 n'existe donc pas à 9h en J-1 : l'agent utilise la D-2.",
+    "marges": "API à identifier (publiée sur la page équilibrage de services-rte) : non branchée"
+  },
+  "indisponibilites": {
+    "chemin": "unavailability_additional_information/v7/generation_unavailabilities",
+    "filieres": ["NUCLEAR"],
+    "pause_entre_requetes_historique_s": 180,
+    "source": "guide Unavailability Additional Information v07.00.00 §6.1 : date_type EVENT_DATE, toutes versions (last_version non renseigné), publication_date UTC par version, pagination 206 + continuation_token, données depuis le 15/12/2010, 20 appels par heure au plus conseillés",
+    "methode": "par identifiant, dernière version publiée avant decision.heure_limite_j_moins_1, annulées écartées, capacité indisponible sommée par quart d'heure et plafonnée à la puissance installée de l'unité"
   }
 }

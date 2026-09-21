@@ -34,6 +34,16 @@ jobs:
           RTE_KEY_B64: ${{ secrets.RTE_KEY_B64 }}
         run: python scripts/collecte_rte.py
         continue-on-error: true
+      - name: Prévisions RTE (consommation, solaire, éolien)
+        env:
+          RTE_KEY_B64: ${{ secrets.RTE_KEY_B64 }}
+        run: python scripts/collecte_previsions.py
+        continue-on-error: true
+      - name: Indisponibilités nucléaires connues avant 9h (J+1)
+        env:
+          RTE_KEY_B64: ${{ secrets.RTE_KEY_B64 }}
+        run: python scripts/collecte_indispo.py
+        continue-on-error: true
       - name: Lecture des enchères intraday déposées
         run: python scripts/lecture_ida.py
         continue-on-error: true

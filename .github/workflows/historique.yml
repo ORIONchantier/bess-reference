@@ -31,6 +31,12 @@ jobs:
           RTE_KEY_B64: ${{ secrets.RTE_KEY_B64 }}
           ENTSOE_TOKEN: ${{ secrets.ENTSOE_TOKEN }}
         run: python scripts/historique.py "${{ github.event.inputs.du }}" "${{ github.event.inputs.au }}"
+      - name: Indisponibilités nucléaires connues à 8h45 J-1 (un appel par mois, pause de 3 min entre les mois)
+        env:
+          RTE_KEY_B64: ${{ secrets.RTE_KEY_B64 }}
+        run: python scripts/collecte_indispo.py "${{ github.event.inputs.du }}" "${{ github.event.inputs.au }}"
+        continue-on-error: true
+        timeout-minutes: 240
       - name: Calcul des revenus sur les jours ajoutés
         run: python scripts/calcul_revenu.py
         continue-on-error: true

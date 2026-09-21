@@ -103,7 +103,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.10</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.13</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -141,7 +141,7 @@
         <dt>DA seul</dt><dd>Même calcul sans aucune réserve : la batterie ne fait que de l'arbitrage day-ahead. Atteignable.</dd>
         <dt>aFRR seul</dt><dd>Même calcul sans aucun échange DA : la batterie ne fait que vendre de la capacité aFRR. Atteignable en capacité, mais les activations réelles la déséquilibrent (voir la rangée « avec énergie activée »).</dd>
         <dt>Réaliste, règle de 9h</dt><dd>La séquence vraie. À 9h J−1, une règle fixe dépose des offres : baisse sur certaines plages, hausse sur d'autres, une part de la puissance, un prix plancher. On constate ensuite sur le prix marginal publié où l'offre aurait été retenue (payée au marginal), puis on optimise le DA à 12h avec ces réserves figées. Aucune prévision : la règle ne regarde pas le DA. Atteignable ; c'est le chiffre à opposer à un agrégateur. Règle en vigueur affichée dans le bloc des revenus et modifiable dans config/parametres.json.</dd>
-        <dt>Énergie activée</dt><dd>Une fois la journée livrée, on estime l'énergie réellement activée sur les MW réservés : part activée = taux national (volume activé / besoin RTE) par pas 15 min, prix = prix moyens pondérés RTE, convention des Règles de marché (à la baisse le fournisseur paie si le prix est positif, à la hausse il est payé). Les activations qui feraient sortir le SoC de 5-95 % ou dépasser 2 cycles sont supposées refusées par le prix d'offre en énergie et comptées à part. Provisoire tant que les 96 pas ne sont pas publiés.</dd>
+        <dt>Énergie activée</dt><dd>Une fois la journée livrée, on estime l'énergie réellement activée sur les MW réservés : part activée = taux national (volume activé / besoin RTE) par pas 15 min, prix = prix moyens pondérés RTE, convention des Règles de marché (à la baisse le fournisseur paie si le prix est positif, à la hausse il est payé). Les activations qui feraient sortir le SoC de 5-95 % ou dépasser 2 cycles sont supposées refusées par le prix d'offre en énergie et comptées à part. L'écart de SoC en fin de journée est valorisé au prix DA moyen de la journée (surplus revendu, manque racheté, rendement compris). Si l'ensemble ressort négatif, on considère qu'aucune offre en énergie n'est déposée ce jour-là : total avec énergie égal au total sans, et le coût évité est indiqué. Provisoire tant que les 96 pas ne sont pas publiés.</dd>
       </dl>
     </details>
   </div>
@@ -155,7 +155,7 @@
       <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real"></div></div>
       <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt"></div></div>
     </div>
-    <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées, offre indexée sur le spot)</div>
+    <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées, offres en énergie à prix couvrant)</div>
     <div class="tuiles quatre" style="margin-bottom:0">
       <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">identique : aucune réserve, donc aucune activation</div></div>
       <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr"></div></div>
@@ -241,7 +241,7 @@
       <label><input type="radio" name="strat" value="da_seul"> DA seul</label>
       <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
       <label><input type="radio" name="strat" value="realiste"> Réaliste</label>
-      <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (offre indexée sur le spot, plafonds SoC et cycles). En multi-jours : moyenne par quart d'heure.</span>
+      <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (prix d'offre couvrant le coût de remplacement, plafonds SoC et cycles). En multi-jours : moyenne par quart d'heure.</span>
       <span class="unite">kW et SoC % · pas 15 min</span>
       <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
     </div>
@@ -305,6 +305,7 @@ const heureParis = iso => fmtParis.format(new Date(iso));
 const parDate = (a, b) => new Date(a.debut) - new Date(b.debut);
 const somme = (arr, f) => arr.reduce((s, p) => s + (Number(f(p)) || 0), 0);
 const moy = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+const fmtJour = iso => iso ? iso.slice(8,10) + "-" + iso.slice(5,7) + "-" + iso.slice(0,4) : "";
 const fmt = (v, d=0) => (v===null || v===undefined || isNaN(v)) ? "—" : Number(v).toLocaleString("fr-FR", {maximumFractionDigits:d});
 const txt = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
 const grille = {grid:{color:"#1a2231"}};
@@ -521,7 +522,7 @@ async function chargerResultats(){
     txt("x-" + IDS[s], s === "da_seul" || nbX[s] > 0 ? fmt(tot[s] + totX[s], 0) : "—");
     if(s !== "da_seul"){
       const x0 = unique ? lus[0].sc.ex_post && lus[0].sc.ex_post[s] : null;
-      txt("xs-" + IDS[s], x0 ? `€/MW ${x0.partiel ? "provisoire, " + x0.pas_couverts + "/96 pas publiés" : "total net"} · énergie ${x0.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(x0.complement_net_eur_par_mw,0)} (↑ ${fmt(x0.energie_hausse_kwh,0)} kWh, ↓ ${fmt(x0.energie_baisse_kwh,0)} kWh) · refusé pour tenir SoC et cycles : ↑ ${fmt(x0.refusee_hausse_kwh,0)} ↓ ${fmt(x0.refusee_baisse_kwh,0)} kWh · ${fmt(x0.cycles_reels,2)} cycles · écart SoC fin ${x0.ecart_soc_fin_kwh >= 0 ? "+" : ""}${fmt(100*x0.ecart_soc_fin_kwh/capaciteKwh,1)} pt`
+      txt("xs-" + IDS[s], x0 ? `€/MW ${x0.partiel ? "provisoire, " + x0.pas_couverts + "/96 pas publiés" : "total net"}` + (x0.sans_offre_energie ? ` · pas d'offre en énergie ce jour : elle aurait coûté ${fmt(-x0.net_si_offre_eur_par_mw,0)} €/MW` : "") + ` · énergie ${x0.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(x0.complement_net_eur_par_mw,0)} (↑ ${fmt(x0.energie_hausse_kwh,0)} kWh, ↓ ${fmt(x0.energie_baisse_kwh,0)} kWh) · refusé pour tenir SoC et cycles : ↑ ${fmt(x0.refusee_hausse_kwh,0)} ↓ ${fmt(x0.refusee_baisse_kwh,0)} kWh · ${fmt(x0.cycles_reels,2)} cycles · écart SoC fin ${x0.ecart_soc_fin_kwh >= 0 ? "+" : ""}${fmt(100*x0.ecart_soc_fin_kwh/capaciteKwh,1)} pt valorisé ${x0.valeur_ecart_soc_eur >= 0 ? "+" : ""}${fmt(x0.valeur_ecart_soc_eur/lus[0].puissance,0)} €/MW au DA moyen ${fmt(x0.prix_da_moyen_eur_mwh,0)} €/MWh`
         : unique ? "en attente des activations de la journée" : `€/MW total${parJ(tot[s] + totX[s])} · énergie ${totX[s] >= 0 ? "+" : ""}${fmt(totX[s],0)} sur ${nbX[s]} j${part[s] ? ", " + part[s] + " provisoires" : ""}`);
       if(unique && s === "afrr_seul" && lus[0].sc.ex_post && lus[0].sc.ex_post.afrr_seul_100){ const v = lus[0].sc.ex_post.afrr_seul_100; document.getElementById("xs-afrr").textContent += ` · si nos offres en énergie sont retenues à 100 % : ${fmt(v.total_net_eur_par_mw,0)} €/MW (énergie ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)}, refusé ↑ ${fmt(v.refusee_hausse_kwh,0)} ↓ ${fmt(v.refusee_baisse_kwh,0)} kWh, ${fmt(v.cycles_reels,2)} cycles)`; }
     }
@@ -531,7 +532,7 @@ async function chargerResultats(){
   if(!unique){
     const noms = {da_seul:"DA seul", afrr_seul:"aFRR seul + énergie", realiste:"Réaliste + énergie", optimum:"Optimum + énergie"};
     const coul = {da_seul: couleur("--cyan"), afrr_seul: couleur("--vert"), realiste: couleur("--orange"), optimum: "#c9d1d9"};
-    grapheParJour = new Chart(document.getElementById("g-parjour"), {type:"bar", data:{labels: lus.map(l => l.jour), datasets: STRATS.map(s => ({label: noms[s], data: parJour[s], backgroundColor: coul[s]}))},
+    grapheParJour = new Chart(document.getElementById("g-parjour"), {type:"bar", data:{labels: lus.map(l => fmtJour(l.jour)), datasets: STRATS.map(s => ({label: noms[s], data: parJour[s], backgroundColor: coul[s]}))},
       options: opts("€/MW/jour", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${fmt(c.parsed.y,0)} €/MW`}}}})});
   }
   // plan moyen par stratégie
@@ -648,7 +649,7 @@ document.getElementById("ida-verifier").addEventListener("click", () => {
   if(!creneaux.length || !lignes.length){ etat.textContent = `Rien de lisible : ${creneaux.length} créneaux, ${lignes.length} lignes de valeurs.`; return; }
   if(creneaux.length !== lignes.length){ etat.textContent = `${creneaux.length} créneaux pour ${lignes.length} lignes de valeurs : collage incomplet ou mélangé.`; return; }
   const prix = lignes.map(l => l[3]);
-  etat.textContent = `${ench} du ${jourDepot()} : ${creneaux.length} pas${creneaux.length === attendu ? "" : " (attendu " + attendu + ")"}, premier créneau ${String(creneaux[0][0]).padStart(2,"0")}:${String(creneaux[0][1]).padStart(2,"0")}, prix de ${fmt(Math.min(...prix),2)} à ${fmt(Math.max(...prix),2)} €/MWh. Prêt à envoyer.`;
+  etat.textContent = `${ench} du ${fmtJour(jourDepot())} : ${creneaux.length} pas${creneaux.length === attendu ? "" : " (attendu " + attendu + ")"}, premier créneau ${String(creneaux[0][0]).padStart(2,"0")}:${String(creneaux[0][1]).padStart(2,"0")}, prix de ${fmt(Math.min(...prix),2)} à ${fmt(Math.max(...prix),2)} €/MWh. Prêt à envoyer.`;
   envoyer.disabled = false;
 });
 document.getElementById("ida-envoyer").addEventListener("click", async () => {
@@ -671,7 +672,7 @@ document.getElementById("ida-envoyer").addEventListener("click", async () => {
     if(sha) corps.sha = sha;
     const r = await fetch(url, {method:"PUT", headers: {...entetes, "Content-Type":"application/json"}, body: JSON.stringify(corps)});
     if(!r.ok){ const err = await r.json().catch(() => ({})); etat.textContent = "Échec GitHub " + r.status + " : " + (err.message || ""); return; }
-    etat.textContent = `${ench} du ${jour} ${sha ? "remplacée" : "déposée"}. Conversion lancée, la page se met à jour dans une à deux minutes (Ctrl+F5).`;
+    etat.textContent = `${ench} du ${fmtJour(jour)} ${sha ? "remplacée" : "déposée"}. Conversion lancée, la page se met à jour dans une à deux minutes (Ctrl+F5).`;
     document.getElementById("ida-texte").value = "";
   }catch(e){ etat.textContent = "Erreur réseau : " + e.message; envoyer.disabled = false; }
 });
@@ -715,8 +716,8 @@ document.getElementById("sites-fichier").addEventListener("change", async e => {
 
 function rafraichir(){
   const j = joursSelection();
-  txt("sel-resume", !j.length ? "Aucun jour sélectionné" : j.length === 1 ? `Journée ${j[0]}` : `Du ${j[0]} au ${j[j.length-1]}, ${j.length} jours`);
-  txt("depot-jour", jourDepot() ? "pour le " + jourDepot() + (j.length > 1 ? " (dernier jour de la sélection)" : "") : "");
+  txt("sel-resume", !j.length ? "Aucun jour sélectionné" : j.length === 1 ? `Journée ${fmtJour(j[0])}` : `Du ${fmtJour(j[0])} au ${fmtJour(j[j.length-1])}, ${j.length} jours`);
+  txt("depot-jour", jourDepot() ? "pour le " + fmtJour(jourDepot()) + (j.length > 1 ? " (dernier jour de la sélection)" : "") : "");
   chargerDA(); chargerAfrr(); chargerResultats();
 }
 
@@ -744,7 +745,7 @@ function rafraichir(){
     calMois = new Date(ref.getFullYear(), ref.getMonth(), 1);
     dessinerCal(); rafraichir();
     const en = idx.afrr_energie || [];
-    for(const j of [...en].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; selEn.appendChild(o); }
+    for(const j of [...en].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=fmtJour(j); selEn.appendChild(o); }
     if(en.length){ selEn.value = en[en.length-1]; chargerEnergie(selEn.value); }
     else { const v=document.getElementById("vide-energie"); v.hidden=false; v.textContent="Aucune journée d'activation collectée pour l'instant."; }
   }catch(e){

@@ -27,7 +27,7 @@ CYCLES = B["cycles_max_par_jour"]
 K = B.get("facteur_marge_afrr_k", 1.0)
 BLOC = CFG.get("afrr", {}).get("bloc_reservation_min", 60)
 DT = 0.25                                                               # h par pas
-VERSION = 8                                                             # incrémenter force le recalcul des jours anciens
+VERSION = 11                                                             # incrémenter force le recalcul des jours anciens
 
 
 def instant(iso: str) -> int:
@@ -223,6 +223,9 @@ def ex_post(jour: str, res: dict):
         for t in range(n - 1, -1, -1):
             m1, m2 = max(m1, soc_plan[t]), min(m2, soc_plan[t]); suf_max[t], suf_min[t] = m1, m2
         budget_cycles = CYCLES * utile - sum(pt["injection_kw"] for pt in plan) * DT / ETA   # kWh batterie encore déchargeables
+        prix_ref = float(np.mean([pt["prix_da"] for pt in plan]))          # DA moyen du jour : valeur de référence de l'énergie stockée
+        turpe_moy = float(np.mean([pt["turpe"] for pt in plan]))           # TURPE moyen de soutirage
+        eta_rt = ETA * ETA
         rev_up = cout_dn = turpe = e_up_tot = e_dn_tot = ref_up = ref_dn = 0.0
         delta = 0.0; soc = []; manquants = 0; act_up_kw = []; act_dn_kw = []
         for t, pt in enumerate(plan):
@@ -237,11 +240,11 @@ def ex_post(jour: str, res: dict):
                     taux_up = 1.0 if (e.get("active_hausse_mw") or 0) > 0 else 0.0
                     taux_dn = 1.0 if abs(e.get("active_baisse_mw") or 0) > 0 else 0.0
                 pu, pd = e.get("prix_hausse_eur_mwh") or 0.0, e.get("prix_baisse_eur_mwh") or 0.0
-                # règle d'offre en énergie indexée sur le spot du quart d'heure :
-                # hausse activée seulement si le prix d'activation >= prix DA ; baisse seulement si prix d'activation <= prix DA
-                spot = pt["prix_da"]
-                if e.get("prix_hausse_eur_mwh") is None or pu < spot: taux_up = 0.0
-                if e.get("prix_baisse_eur_mwh") is None or pd > spot: taux_dn = 0.0
+                # règle d'offre en énergie : le prix demandé couvre le coût réel pour la batterie, à chaque quart d'heure.
+                # hausse : 1 MWh livré vide 1/eta_rt MWh à racheter (DA de référence + TURPE) -> activé si pu > prix_ref/eta_rt + turpe_moy
+                # baisse : 1 MWh absorbé coûte pd + TURPE(t) et rapporte eta_rt MWh revendables -> activé si pd + turpe(t) < eta_rt*prix_ref
+                if e.get("prix_hausse_eur_mwh") is None or pu <= prix_ref / eta_rt + turpe_moy: taux_up = 0.0
+                if e.get("prix_baisse_eur_mwh") is None or pd + pt["turpe"] >= eta_rt * prix_ref: taux_dn = 0.0
             d_up = pt["reserve_hausse_kw"] * taux_up * DT              # kWh demandés à la hausse (côté réseau)
             d_dn = pt["reserve_baisse_kw"] * taux_dn * DT              # kWh demandés à la baisse
             # plafonds : SoC tenable sur le reste de la journée, et budget de cycles
@@ -261,13 +264,26 @@ def ex_post(jour: str, res: dict):
         if manquants and couverts >= 96: alertes.append(f"{manquants} pas sans donnée d'activation")
         cycles = (sum(pt["injection_kw"] for pt in plan) * DT + e_up_tot) / ETA / utile
         mw = P_KW / 1000
-        net = rev_up - cout_dn - turpe
+        # valeur de l'écart de SoC en fin de journée : surplus revendu, manque racheté, au prix DA moyen de la journée
+        prix_moy_da = float(np.mean([pt["prix_da"] for pt in plan])) if plan else 0.0
+        valeur_ecart = (delta * ETA if delta >= 0 else delta / ETA) / 1000 * prix_moy_da
+        net = rev_up - cout_dn - turpe + valeur_ecart
+        # règle : on ne dépose d'offre en énergie que si elle rapporte. Sinon, aucune activation ce jour-là
+        # (offres au plafond), et on garde le montant qu'elle aurait coûté pour information.
+        sans_offre = net < 0
+        net_si_offre = net
+        if sans_offre:
+            net = 0.0; rev_up = cout_dn = turpe = e_up_tot = e_dn_tot = 0.0; valeur_ecart = 0.0; delta = 0.0
+            ref_up = ref_dn = 0.0; act_up_kw = [0.0] * len(plan); act_dn_kw = [0.0] * len(plan); soc = list(soc_plan)
+            cycles = sum(pt["injection_kw"] for pt in plan) * DT / ETA / utile
         out[nom] = {"energie_hausse_kwh": round(e_up_tot, 1), "energie_baisse_kwh": round(e_dn_tot, 1),
                     "refusee_hausse_kwh": round(ref_up, 1), "refusee_baisse_kwh": round(ref_dn, 1),
                     "revenu_hausse_eur": round(rev_up, 2), "cout_baisse_eur": round(cout_dn, 2), "turpe_eur": round(turpe, 2),
                     "complement_net_eur": round(net, 2), "complement_net_eur_par_mw": round(net / mw, 1),
                     "total_net_eur_par_mw": round(o["net_eur_par_mw"] + net / mw, 1),
                     "cycles_reels": round(cycles, 3), "ecart_soc_fin_kwh": round(delta, 1),
+                    "valeur_ecart_soc_eur": round(valeur_ecart, 2), "prix_da_moyen_eur_mwh": round(prix_moy_da, 2),
+                    "sans_offre_energie": bool(sans_offre), "net_si_offre_eur_par_mw": round(net_si_offre / mw, 1),
                     "soc_reel_kwh": soc, "active_hausse_kw": act_up_kw, "active_baisse_kw": act_dn_kw, "alertes": alertes,
                     "pas_couverts": int(couverts), "partiel": couverts < 96}
     return out or None

@@ -46,7 +46,7 @@
   .jeton{margin-top:8px}
   .jeton summary{cursor:pointer;color:var(--cyan);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
   .jeton label{margin-right:12px}
-  .bloc.plan{background:#161a12;border-color:#3a3a1a}
+  .bloc.plan{background:#161a12;border:2px solid var(--jaune)}
   .bloc.plan .bloc-titre h2{color:var(--jaune)}
   .bloc.plan .graphe{height:480px}
   .bloc.plan:fullscreen .graphe{height:calc(100vh - 120px)}
@@ -75,6 +75,9 @@
   .racc-btn:first-of-type{border-radius:4px 0 0 4px}.racc-btn:last-of-type{border-radius:0 4px 4px 0;margin-left:-1px}
   .racc-btn.actif{color:#0b0e14;background:var(--jaune);border-color:var(--jaune)}
   #site-hta{max-width:220px}
+  .replier{font:inherit;font-size:14px;line-height:1;color:var(--sourd);background:none;border:1px solid var(--bord);border-radius:4px;padding:4px 8px;cursor:pointer;margin-left:6px}
+  .bloc.replie > *:not(.bloc-titre){display:none}
+  .bloc.replie .bloc-titre{margin-bottom:0}
   .agrandir{font:inherit;font-size:14px;line-height:1;color:var(--cyan);background:none;border:1px solid var(--bord);border-radius:4px;padding:4px 8px;cursor:pointer}
   .agrandir:hover{border-color:var(--cyan)}
   .vide{color:var(--sourd);padding:36px;text-align:center}
@@ -87,7 +90,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.3</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.4</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -128,18 +131,36 @@
     <div class="bloc-titre"><h2>Revenus de référence, €/MW/jour net TURPE</h2><span class="note" id="note-expost"></span></div>
     <div class="rangee-lib">Capacité aFRR + arbitrage DA, sans énergie activée</div>
     <div class="tuiles quatre">
-      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt">€/MW/jour net TURPE</div></div>
       <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da">€/MW/jour net TURPE</div></div>
       <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr">€/MW/jour net TURPE</div></div>
       <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real">€/MW/jour net TURPE</div></div>
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt">€/MW/jour net TURPE</div></div>
     </div>
     <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées)</div>
     <div class="tuiles quatre" style="margin-bottom:0">
-      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt">€/MW/jour total net</div></div>
       <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">identique : aucune réserve, donc aucune activation</div></div>
       <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr">€/MW/jour total net</div></div>
       <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real">€/MW/jour total net</div></div>
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt">€/MW/jour total net</div></div>
     </div>
+  </div>
+
+  <div class="bloc" id="bloc-cumul">
+    <div class="bloc-titre">
+      <h2>Cumul sur plusieurs jours</h2>
+      <label for="cumul-du">Du</label><select id="cumul-du"></select>
+      <label for="cumul-au">au</label><select id="cumul-au"></select>
+      <button class="bouton" id="cumul-calculer" type="button">Cumuler</button>
+      <span class="note" id="cumul-etat"></span>
+      <span class="unite">€/MW · raccordement sélectionné</span>
+    </div>
+    <div class="tuiles quatre" id="cumul-tuiles" hidden>
+      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="c-da">—</div><div class="sub" id="cs-da"></div></div>
+      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="c-afrr">—</div><div class="sub" id="cs-afrr"></div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="c-real">—</div><div class="sub" id="cs-real"></div></div>
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="c-opt">—</div><div class="sub" id="cs-opt"></div></div>
+    </div>
+    <div class="graphe" id="cumul-graphe-cadre" hidden><canvas id="g-cumul"></canvas></div>
   </div>
 
   <div class="tuiles">
@@ -212,7 +233,7 @@
       <label><input type="radio" name="strat" value="da_seul"> DA seul</label>
       <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
       <label><input type="radio" name="strat" value="realiste"> Réaliste</label>
-      <span class="note">Énergie planifiée : marché DA uniquement. L'aFRR est une puissance réservée, l'énergie activée est estimée a posteriori.</span>
+      <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (offre en énergie indexée sur le spot du quart d'heure, plafonds SoC et cycles).</span>
       <span class="unite">kW et SoC % · pas 15 min</span>
       <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
     </div>
@@ -250,6 +271,16 @@ Chart.defaults.font.size = 11;
 Chart.defaults.borderColor = "#1f2a3a";
 Chart.defaults.interaction = {mode:"index", intersect:false};
 Chart.defaults.maintainAspectRatio = false;
+document.querySelectorAll(".bloc").forEach((b, i) => {
+  const titre = b.querySelector(".bloc-titre"); if(!titre || b.classList.contains("commande")) return;
+  const id = b.id || ("bloc-" + i); b.id = id;
+  const btn = document.createElement("button"); btn.className = "replier"; btn.type = "button"; btn.title = "Replier ou déplier ce bloc";
+  const maj = () => btn.textContent = b.classList.contains("replie") ? "▸" : "▾";
+  try{ if(localStorage.getItem("bess-replie-" + id) === "1") b.classList.add("replie"); }catch(e){}
+  maj();
+  btn.addEventListener("click", () => { b.classList.toggle("replie"); maj(); try{ localStorage.setItem("bess-replie-" + id, b.classList.contains("replie") ? "1" : "0"); }catch(e){} });
+  titre.appendChild(btn);
+});
 document.querySelectorAll(".agrandir").forEach(b => b.addEventListener("click", () => {
   const bloc = b.closest(".bloc");
   if(document.fullscreenElement) document.exitFullscreen(); else bloc.requestFullscreen();
@@ -362,10 +393,14 @@ function dessinerPlan(){
   const labels = plan.map(p => heureParis(p.debut));
   const socPct = plan.map(p => 100 * p.soc_kwh / capaciteKwh);
   const revenuPas = p => (p.injection_kw * p.prix_da - p.soutirage_kw * (p.prix_da + p.turpe)) * 0.25 / 1000;
+  const xpS = res.ex_post && res.ex_post[strat] && res.ex_post[strat].active_hausse_kw ? res.ex_post[strat] : null;
   graphePlan = new Chart(document.getElementById("g-plan"), {
     data:{labels, datasets:[
       {type:"bar", label:"Soutirage DA, achat sur le marché (kW)", data:plan.map(p => -p.soutirage_kw), backgroundColor:"rgba(239,68,68,.7)", yAxisID:"y", stack:"p"},
       {type:"bar", label:"Injection DA, vente sur le marché (kW)", data:plan.map(p => p.injection_kw), backgroundColor:"rgba(34,211,238,.7)", yAxisID:"y", stack:"p"},
+      ...(xpS ? [
+        {type:"bar", label:"Soutirage par activation aFRR baisse, estimé (kW)", data:xpS.active_baisse_kw.map(v => -v), backgroundColor:"rgba(167,139,250,.75)", yAxisID:"y", stack:"p"},
+        {type:"bar", label:"Injection par activation aFRR hausse, estimée (kW)", data:xpS.active_hausse_kw, backgroundColor:"rgba(34,197,94,.75)", yAxisID:"y", stack:"p"}] : []),
       {type:"line", label:"Réserve aFRR baisse, capacité (kW)", data:plan.map(p => -p.reserve_baisse_kw), borderColor:couleur("--baisse"), borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
       {type:"line", label:"Réserve aFRR hausse, capacité (kW)", data:plan.map(p => p.reserve_hausse_kw), borderColor:couleur("--hausse"), borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
       {type:"line", label:"SoC planifié (%)", data:socPct, borderColor:couleur("--jaune"), borderWidth:2, pointRadius:0, yAxisID:"y2"},
@@ -373,15 +408,16 @@ function dessinerPlan(){
     options:{responsive:true, plugins:{legend:{position:"bottom"}, title:{display:true, text:`Stratégie : ${stratLabel[strat]}`, color:"#c9d1d9", font:{weight:"normal"}},
       tooltip:{callbacks:{
         label: ctx => {
-          const p = plan[ctx.dataIndex], v = Math.abs(ctx.parsed.y);
-          switch(ctx.datasetIndex){
-            case 0: return v ? `Soutirage DA : ${fmt(v,0)} kW, acheté ${fmt(p.prix_da,1)} €/MWh + TURPE ${fmt(p.turpe,1)} €/MWh` : "Soutirage DA : 0";
-            case 1: return v ? `Injection DA : ${fmt(v,0)} kW, vendu ${fmt(p.prix_da,1)} €/MWh` : "Injection DA : 0";
-            case 2: return `Réserve aFRR baisse : ${fmt(v,0)} kW (capacité)`;
-            case 3: return `Réserve aFRR hausse : ${fmt(v,0)} kW (capacité)`;
-            case 4: return `SoC planifié : ${fmt(ctx.parsed.y,1)} % (${fmt(p.soc_kwh,0)} kWh)`;
-            case 5: return `SoC réel estimé : ${fmt(ctx.parsed.y,1)} %`;
-          }
+          const p = plan[ctx.dataIndex], v = Math.abs(ctx.parsed.y), l = ctx.dataset.label;
+          if(l.startsWith("Soutirage DA")) return v ? `Soutirage DA : ${fmt(v,0)} kW, acheté ${fmt(p.prix_da,1)} €/MWh + TURPE ${fmt(p.turpe,1)} €/MWh` : "Soutirage DA : 0";
+          if(l.startsWith("Injection DA")) return v ? `Injection DA : ${fmt(v,0)} kW, vendu ${fmt(p.prix_da,1)} €/MWh` + (p.turpe_inj ? ` moins TURPE injection ${fmt(p.turpe_inj,1)}` : "") : "Injection DA : 0";
+          if(l.startsWith("Soutirage par activation")) return v ? `Activation aFRR baisse : ${fmt(v,0)} kW absorbés, TURPE ${fmt(p.turpe,1)} €/MWh` : null;
+          if(l.startsWith("Injection par activation")) return v ? `Activation aFRR hausse : ${fmt(v,0)} kW livrés` : null;
+          if(l.startsWith("Réserve aFRR baisse")) return `Réserve aFRR baisse : ${fmt(v,0)} kW (capacité)`;
+          if(l.startsWith("Réserve aFRR hausse")) return `Réserve aFRR hausse : ${fmt(v,0)} kW (capacité)`;
+          if(l.startsWith("SoC planifié")) return `SoC planifié : ${fmt(ctx.parsed.y,1)} % (${fmt(p.soc_kwh,0)} kWh)`;
+          if(l.startsWith("SoC réel")) return `SoC réel estimé : ${fmt(ctx.parsed.y,1)} %`;
+          return l;
         },
         footer: items => { const p = plan[items[0].dataIndex]; return `Résultat DA du pas : ${fmt(revenuPas(p),2)} €`; }
       }}},
@@ -596,6 +632,53 @@ document.getElementById("sites-fichier").addEventListener("change", async e => {
   if(ok) etat.textContent += " Le sélecteur de sites se mettra à jour après le passage du robot (Ctrl+F5).";
 });
 
+let grapheCumul = null;
+async function cumuler(){
+  const etat = document.getElementById("cumul-etat");
+  const du = document.getElementById("cumul-du").value, au = document.getElementById("cumul-au").value;
+  const jours = (window.joursResultats || []).filter(j => j >= du && j <= au);
+  if(!jours.length){ etat.textContent = "Aucun jour calculé dans cet intervalle."; return; }
+  etat.textContent = `Lecture de ${jours.length} jour(s)…`;
+  const cle = cleScenario();
+  const strats = ["da_seul", "afrr_seul", "realiste", "optimum"];
+  const totCap = {}, totEn = {}, parJour = {}, nbEn = {}, partiels = {};
+  for(const s of strats){ totCap[s] = 0; totEn[s] = 0; parJour[s] = []; nbEn[s] = 0; partiels[s] = 0; }
+  let lus = 0;
+  for(const j of jours){
+    try{
+      const r = await (await fetch(`data/resultats/${j}.json`, {cache:"no-store"})).json();
+      const sc = r.scenarios ? (r.scenarios[cle] || r.scenarios.BT) : null;
+      if(!sc) continue;
+      lus++;
+      for(const s of strats){
+        const o = sc[s], cap = o && !o.erreur ? o.net_eur_par_mw : 0;
+        const xp = sc.ex_post && sc.ex_post[s];
+        const en = xp ? xp.complement_net_eur_par_mw : 0;
+        totCap[s] += cap; totEn[s] += en; parJour[s].push(cap + en);
+        if(xp){ nbEn[s]++; if(xp.partiel) partiels[s]++; }
+      }
+    }catch(e){ for(const s of strats) parJour[s].push(null); }
+  }
+  etat.textContent = `${lus} jour(s) cumulés, du ${jours[0]} au ${jours[jours.length-1]}.`;
+  document.getElementById("cumul-tuiles").hidden = false;
+  const ids = {da_seul:"da", afrr_seul:"afrr", realiste:"real", optimum:"opt"};
+  for(const s of strats){
+    const tot = totCap[s] + totEn[s];
+    txt("c-" + ids[s], fmt(tot, 0));
+    txt("cs-" + ids[s], `€/MW sur ${lus} j, soit ${fmt(tot / Math.max(lus,1), 0)} €/MW/jour en moyenne · capacité et DA ${fmt(totCap[s],0)}, énergie ${totEn[s] >= 0 ? "+" : ""}${fmt(totEn[s],0)}` + (s === "da_seul" ? "" : ` (${nbEn[s]} j avec activations${partiels[s] ? ", " + partiels[s] + " provisoires" : ""})`));
+  }
+  document.getElementById("cumul-graphe-cadre").hidden = false;
+  if(grapheCumul) grapheCumul.destroy();
+  const couleurs = {da_seul: couleur("--cyan"), afrr_seul: couleur("--vert"), realiste: couleur("--orange"), optimum: "#c9d1d9"};
+  const noms = {da_seul:"DA seul", afrr_seul:"aFRR seul + énergie", realiste:"Réaliste + énergie", optimum:"Optimum + énergie"};
+  grapheCumul = new Chart(document.getElementById("g-cumul"), {
+    type:"bar",
+    data:{labels: jours, datasets: strats.map(s => ({label: noms[s], data: parJour[s], backgroundColor: couleurs[s]}))},
+    options: opts("€/MW/jour", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${fmt(c.parsed.y,0)} €/MW`}}}})
+  });
+}
+document.getElementById("cumul-calculer").addEventListener("click", cumuler);
+
 function remplir(select, jours){
   for(const j of [...jours].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; select.appendChild(o); }
 }
@@ -621,6 +704,10 @@ function remplir(select, jours){
     const illisibles = idx.ida_illisibles || {};
     if(Object.keys(illisibles).length) document.getElementById("note-turpe").insertAdjacentHTML("afterend", '<div class="note" style="color:var(--rouge)">Fichiers intraday illisibles : ' + Object.entries(illisibles).map(([f, e]) => f + " (" + e + ")").join(" ; ") + '</div>');
     remplir(sel, idx.jours || []);
+    window.joursResultats = idx.resultats || [];
+    const cdu = document.getElementById("cumul-du"), cau = document.getElementById("cumul-au");
+    for(const j of window.joursResultats){ for(const s of [cdu, cau]){ const o = document.createElement("option"); o.value = j; o.textContent = j; s.appendChild(o); } }
+    if(window.joursResultats.length){ cdu.value = window.joursResultats[0]; cau.value = window.joursResultats[window.joursResultats.length-1]; }
     if((idx.jours||[]).length){ sel.value = idx.jours[idx.jours.length-1]; chargerDA(sel.value); chargerAfrr(sel.value); chargerResultats(sel.value); }
     else { const v=document.getElementById("vide-da"); v.hidden=false; v.textContent="Aucune collecte enregistrée : lance le workflow une première fois."; }
     sel.addEventListener("change", e => { chargerDA(e.target.value); chargerAfrr(e.target.value); chargerResultats(e.target.value); });

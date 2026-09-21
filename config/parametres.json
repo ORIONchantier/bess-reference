@@ -35,7 +35,9 @@
     "hypotheses_a_confirmer": [
       "saison haute novembre à mars (convention TURPE)"
     ],
-    "confirme": "option CU4 et heures creuses 22h-6h confirmées le 18/09/2026"
+    "confirme": "option CU4 et heures creuses 22h-6h confirmées le 18/09/2026",
+    "type_raccordement_defaut": "BT",
+    "jours_feries_hc": true
   },
   "afrr": {
     "bloc_reservation_min": 60,
@@ -67,5 +69,106 @@
   "ex_post": {
     "description": "Complément aFRR énergie calculé une fois la journée livrée : part activée = taux national (volume activé / besoin RTE) appliqué aux MW réservés ; prix = prix moyen pondéré publié. Convention RM chap. 4 : à la baisse un prix positif est payé par le fournisseur de réserve, à la hausse il lui est versé. TURPE appliqué à l'énergie absorbée.",
     "proxy_part_activee": "taux_national"
+  },
+  "turpe_hta": {
+    "source": "Fichier_Estimatif_TURPE_2026.xlsm (grilles au 1er août 2026, courte utilisation) et capture du 21/09/2026 ; parties variables uniquement",
+    "principe": "poste source le plus proche (distance GPS) -> zone HTA du poste -> grille. Zone non contrainte : HTA 5 plages pointe fixe. Zone injection PV ou zone soutirage : composante injection-soutirage.",
+    "grilles_c_eur_kwh": {
+      "standard": {
+        "soutirage": {
+          "POINTE": 5.91,
+          "HPH": 4.36,
+          "HCH": 2.05,
+          "HPB": 1.04,
+          "HCB": 0.71
+        },
+        "injection": {
+          "POINTE": 0,
+          "HPH": 0,
+          "HCH": 0,
+          "HPB": 0,
+          "HCB": 0
+        }
+      },
+      "zone_soutirage": {
+        "soutirage": {
+          "POINTE": 5.91,
+          "HPH": 4.36,
+          "HCH": 2.05,
+          "HPB": 1.04,
+          "HCB": 0.71
+        },
+        "injection": {
+          "POINTE": -4.88,
+          "HPH": 0,
+          "HCH": 0,
+          "HPB": 0,
+          "HCB": 0
+        }
+      },
+      "zone_injection": {
+        "soutirage": {
+          "POINTE_INJ": -7.1,
+          "HPH": 2.64,
+          "HCH": 1.58,
+          "HPB": 0.93,
+          "HCB": 0.71
+        },
+        "injection": {
+          "POINTE_INJ": 7.81,
+          "HPH": 0.47,
+          "HCH": 0.47,
+          "HPB": 0.47,
+          "HCB": 0.47
+        }
+      }
+    },
+    "plages": {
+      "saison_haute_mois": [
+        11,
+        12,
+        1,
+        2,
+        3
+      ],
+      "heures_creuses": "23:00-07:00",
+      "week_end_et_feries_en_hc": true,
+      "pointe_soutirage": {
+        "mois": [
+          12,
+          1,
+          2
+        ],
+        "jours": "lundi-samedi",
+        "heures": [
+          "09:00-11:00",
+          "18:00-20:00"
+        ]
+      },
+      "pointe_injection": {
+        "mois": [
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "jours": "lundi-samedi",
+        "heures": [
+          "11:00-15:00"
+        ]
+      }
+    },
+    "hypotheses_a_confirmer": [
+      "heures de pointe soutirage 9h-11h et 18h-20h, décembre à février, lundi à samedi (structure TURPE 6 reconduite ; Enedis place 2 h le matin dans 8h-12h et 2 h le soir)",
+      "heures de pointe injection 11h-15h, avril à août, lundi à samedi (125 jours dans le classeur, plage horaire non documentée)",
+      "heures creuses HTA 23h-7h, week-ends et fériés entièrement en HC (classeur)",
+      "composante d'injection HTA standard prise à 0 c€/kWh (classeur) ; à confirmer",
+      "zone 'Poste en zones de soutirage HTB' ou 'injection HTB' seule : grille standard (logique du classeur)"
+    ],
+    "fichiers": {
+      "postes_sources": "data/reference/postes_sources.csv",
+      "sites": "data/reference/sites.csv"
+    }
   }
 }

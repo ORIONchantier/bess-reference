@@ -1,0 +1,2 @@
+postes_sources.csv : base des postes sources Enedis et zone TURPE 7 (extraite du classeur Fichier_Estimatif_TURPE_2026.xlsm, colonnes séparées par ;).
+sites.csv : vos sites de stockage, colonnes nom;type(HTA ou BT);latitude;longitude;puissance_kw;capacite_kwh. Les lignes HTA sont calculées, les lignes BT sont ignorées pour l'instant.

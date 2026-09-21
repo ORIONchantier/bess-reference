@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 import numpy as np
 from scipy.optimize import linprog
 from scipy.sparse import lil_matrix
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import turpe as turpe_mod
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
@@ -25,7 +27,7 @@ CYCLES = B["cycles_max_par_jour"]
 K = B.get("facteur_marge_afrr_k", 1.0)
 BLOC = CFG.get("afrr", {}).get("bloc_reservation_min", 60)
 DT = 0.25                                                               # h par pas
-VERSION = 4                                                             # incrémenter force le recalcul des jours anciens
+VERSION = 5                                                             # incrémenter force le recalcul des jours anciens
 
 
 def instant(iso: str) -> int:
@@ -33,13 +35,7 @@ def instant(iso: str) -> int:
     return int(dt.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp())
 
 
-def turpe_eur_mwh(t: dt.datetime) -> float:
-    """Composante de soutirage selon plage horosaisonnière (CU4, 4 plages)."""
-    haute = t.month in T["saison_haute_mois"]
-    h0, h1 = [int(x.split(":")[0]) for x in T["heures_creuses"].split("-")]
-    hc = (t.hour >= h0 or t.hour < h1) if h0 > h1 else (h0 <= t.hour < h1)
-    key = ("HC" if hc else "HP") + ("H" if haute else "B")
-    return T["soutirage_eur_mwh"][key]
+TARIF = turpe_mod.TarifBT()          # remplacé par calculer() pour chaque scénario de raccordement
 
 
 def charger_jour(jour: str):
@@ -62,7 +58,8 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True, reserves_fixes=None):
         return None
     debuts = [dt.datetime.fromisoformat(p["debut"]).astimezone(PARIS) for p in da]
     prix = np.array([float(p["prix"]) for p in da])                     # €/MWh
-    turpe = np.array([turpe_eur_mwh(t) for t in debuts])                # €/MWh soutirés
+    turpe = np.array([TARIF.soutirage(t) for t in debuts])              # €/MWh soutirés
+    turpe_i = np.array([TARIF.injection(t) for t in debuts])            # €/MWh injectés (HTA)
     pas_par_bloc = max(1, BLOC // 15)
     nb = math.ceil(n / pas_par_bloc)
     bloc_de = [i // pas_par_bloc for i in range(n)]
@@ -87,7 +84,7 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True, reserves_fixes=None):
     cost = np.zeros(nv)                                                  # linprog minimise : on met -revenu
     if avec_da:
         cost[ic:ic + n] = (prix + turpe) * DT / 1000                     # coût d'achat + TURPE, € par kW
-        cost[idx_d:idx_d + n] = -prix * DT / 1000
+        cost[idx_d:idx_d + n] = -(prix - turpe_i) * DT / 1000
     if afrr_ok:
         cost[i_ru:i_ru + nb] = -np.array(p_up) * pas_par_bloc * DT / 1000   # €/MW/h * h / 1000 -> € par kW
         cost[i_rd:i_rd + nb] = -np.array(p_dn) * pas_par_bloc * DT / 1000
@@ -143,7 +140,7 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True, reserves_fixes=None):
     ru, rd = x[i_ru:i_ru + nb], x[i_rd:i_rd + nb]
     soc = s0 + np.cumsum(c * ETA * DT - d * DT / ETA)
     rev_da_brut = float(np.sum((d - c) * prix) * DT / 1000)
-    cout_turpe = float(np.sum(c * turpe) * DT / 1000)
+    cout_turpe = float((np.sum(c * turpe) + np.sum(d * turpe_i)) * DT / 1000)
     rev_up = float(np.sum(ru * np.array(p_up)) * pas_par_bloc * DT / 1000)
     rev_dn = float(np.sum(rd * np.array(p_dn)) * pas_par_bloc * DT / 1000)
     mw = P_KW / 1000
@@ -159,7 +156,7 @@ def optimiser(da, prix_cap, avec_da=True, avec_afrr=True, reserves_fixes=None):
         "soc_initial_kwh": round(float(s0), 1),
         "plan": [{"debut": da[t]["debut"], "soutirage_kw": round(float(c[t]), 1), "injection_kw": round(float(d[t]), 1),
                   "soc_kwh": round(float(soc[t]), 1), "reserve_hausse_kw": round(float(ru[bloc_de[t]]), 1),
-                  "reserve_baisse_kw": round(float(rd[bloc_de[t]]), 1), "prix_da": float(prix[t]), "turpe": float(turpe[t])}
+                  "reserve_baisse_kw": round(float(rd[bloc_de[t]]), 1), "prix_da": float(prix[t]), "turpe": float(turpe[t]), "turpe_inj": float(turpe_i[t])}
                  for t in range(n)],
     }
 
@@ -198,7 +195,8 @@ def strategie_realiste(da, prix_cap):
 
 
 def ex_post(jour: str, res: dict):
-    """Complément aFRR énergie une fois la journée livrée. Proxy : part activée = taux national par pas 15 min."""
+    """Complément aFRR énergie une fois la journée livrée. Proxy : part activée = taux national par pas 15 min.
+    res : le dictionnaire d'un scénario (optimum, da_seul, afrr_seul, realiste)."""
     path = DATA / "afrr_energie" / f"{jour}.json"
     if not path.exists():
         return None
@@ -242,7 +240,7 @@ def ex_post(jour: str, res: dict):
             ref_up += d_up - e_up; ref_dn += d_dn - e_dn
             rev_up += e_up / 1000 * pu
             cout_dn += e_dn / 1000 * pd
-            turpe += e_dn / 1000 * pt["turpe"]
+            turpe += e_dn / 1000 * pt["turpe"] + e_up / 1000 * pt.get("turpe_inj", 0.0)
             e_up_tot += e_up; e_dn_tot += e_dn
             budget_cycles -= e_up / ETA
             delta += e_dn * ETA - e_up / ETA
@@ -264,13 +262,19 @@ def ex_post(jour: str, res: dict):
 
 
 def calculer(jour: str) -> dict:
+    global TARIF
     da, prix_cap = charger_jour(jour)
     out = {"jour": jour, "version": VERSION, "calcule_le": dt.datetime.now(PARIS).isoformat(timespec="minutes"),
-           "puissance_mw": P_KW / 1000, "afrr_disponible": bool(prix_cap)}
-    out["optimum"] = optimiser(da, prix_cap, True, True)
-    out["da_seul"] = optimiser(da, prix_cap, True, False)
-    out["afrr_seul"] = optimiser(da, prix_cap, False, True)
-    out["realiste"] = strategie_realiste(da, prix_cap)
+           "puissance_mw": P_KW / 1000, "afrr_disponible": bool(prix_cap), "scenarios": {}}
+    for cle, tarif in turpe_mod.scenarios():
+        TARIF = tarif
+        sc = {"tarif": tarif.description()}
+        sc["optimum"] = optimiser(da, prix_cap, True, True)
+        sc["da_seul"] = optimiser(da, prix_cap, True, False)
+        sc["afrr_seul"] = optimiser(da, prix_cap, False, True)
+        sc["realiste"] = strategie_realiste(da, prix_cap)
+        out["scenarios"][cle] = sc
+    TARIF = turpe_mod.TarifBT()
     return out
 
 
@@ -290,31 +294,36 @@ def main():
             except Exception:
                 pass
         r = calculer(j)
-        o = r["optimum"] or {}
-        if r["afrr_disponible"] and not o.get("blocs_afrr_raccordes"):
-            print(f"{j} : ATTENTION, prix aFRR présents mais aucun pas raccordé au DA (horodatages ?)")
         cible.write_text(json.dumps(r, ensure_ascii=False))
-        rl = r.get("realiste") or {}
-        print(f"{j} : optimum {o.get('net_eur_par_mw', '?')} €/MW net, DA seul {(r['da_seul'] or {}).get('net_eur_par_mw', '?')}, "
-              f"aFRR seul {(r['afrr_seul'] or {}).get('net_eur_par_mw', '?')}, réaliste {rl.get('net_eur_par_mw', rl.get('erreur', '?'))}, cycles {o.get('cycles', '?')}")
+        for cle, sc in r["scenarios"].items():
+            o = sc["optimum"] or {}
+            if r["afrr_disponible"] and not o.get("blocs_afrr_raccordes"):
+                print(f"{j} {cle} : ATTENTION, prix aFRR présents mais aucun pas raccordé au DA (horodatages ?)")
+            rl = sc.get("realiste") or {}
+            print(f"{j} {cle} : optimum {o.get('net_eur_par_mw', '?')} €/MW net, DA seul {(sc['da_seul'] or {}).get('net_eur_par_mw', '?')}, "
+                  f"aFRR seul {(sc['afrr_seul'] or {}).get('net_eur_par_mw', '?')}, réaliste {rl.get('net_eur_par_mw', rl.get('erreur', '?'))}, cycles {o.get('cycles', '?')}")
     # passe ex post : journées livrées dont les activations sont complètes
     for cible in sorted((DATA / "resultats").glob("????-??-??.json")):
         r = json.loads(cible.read_text())
         if r.get("version") != VERSION:
             continue
-        deja = r.get("ex_post") or {}
-        if deja and not any(v.get("partiel") for v in deja.values()):
-            continue                                       # définitif, rien à refaire
-        xp = ex_post(cible.stem, r)
-        if xp:
-            r["ex_post"] = xp
+        modifie = False
+        for cle, sc in r["scenarios"].items():
+            deja = sc.get("ex_post") or {}
+            if deja and not any(v.get("partiel") for v in deja.values()):
+                continue                                   # définitif, rien à refaire
+            xp = ex_post(cible.stem, sc)
+            if xp:
+                sc["ex_post"] = xp; modifie = True
+                o = xp.get("optimum", {})
+                print(f"{cible.stem} {cle} : ex post énergie {'partiel ' + str(o.get('pas_couverts')) + '/96' if o.get('partiel') else 'définitif'}, "
+                      f"optimum {o.get('complement_net_eur_par_mw', '?')} €/MW, réaliste {xp.get('realiste', {}).get('complement_net_eur_par_mw', '?')} €/MW")
+        if modifie:
             cible.write_text(json.dumps(r, ensure_ascii=False))
-            o = xp.get("optimum", {})
-            print(f"{cible.stem} : ex post énergie {'partiel ' + str(o.get('pas_couverts')) + '/96' if o.get('partiel') else 'définitif'}, "
-                  f"optimum {o.get('complement_net_eur_par_mw', '?')} €/MW, réaliste {xp.get('realiste', {}).get('complement_net_eur_par_mw', '?')} €/MW")
     idx_path = DATA / "index.json"
     idx = json.loads(idx_path.read_text()) if idx_path.exists() else {}
     idx["resultats"] = sorted(p.stem for p in (DATA / "resultats").glob("????-??-??.json"))
+    idx["scenarios"] = [{"cle": cle, **t.description()} for cle, t in turpe_mod.scenarios()]
     idx_path.write_text(json.dumps(idx, ensure_ascii=False))
 
 

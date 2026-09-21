@@ -68,6 +68,12 @@
   .methode dl{margin:10px 0 0;display:grid;grid-template-columns:max-content 1fr;gap:6px 16px}
   .methode dt{color:var(--jaune);font-weight:700;white-space:nowrap}
   .methode dd{margin:0;color:var(--texte)}
+  .racc{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
+  .racc + .sous{margin-left:16px}
+  .racc-btn{font:inherit;font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--sourd);background:#0f1522;border:1px solid var(--bord);padding:7px 14px;cursor:pointer}
+  .racc-btn:first-of-type{border-radius:4px 0 0 4px}.racc-btn:last-of-type{border-radius:0 4px 4px 0;margin-left:-1px}
+  .racc-btn.actif{color:#0b0e14;background:var(--jaune);border-color:var(--jaune)}
+  #site-hta{max-width:220px}
   .agrandir{font:inherit;font-size:14px;line-height:1;color:var(--cyan);background:none;border:1px solid var(--bord);border-radius:4px;padding:4px 8px;cursor:pointer}
   .agrandir:hover{border-color:var(--cyan)}
   .vide{color:var(--sourd);padding:36px;text-align:center}
@@ -80,7 +86,12 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-18.3</span>
+  <span class="racc" title="Type de raccordement de la batterie étudiée">
+    <label>Raccordement</label>
+    <button type="button" class="racc-btn" data-racc="BT">BT</button><button type="button" class="racc-btn" data-racc="HTA">HTA</button>
+    <select id="site-hta" hidden></select>
+  </span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.1</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -93,6 +104,7 @@
       <span class="note" id="note-batterie">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</span>
     </div>
     <div class="note" id="note-turpe"></div>
+    <div class="note" id="note-tarif" style="color:var(--jaune)"></div>
     <details class="methode" style="margin-top:10px">
       <summary>Méthode : ce que mesure chaque chiffre</summary>
       <dl>
@@ -163,6 +175,17 @@
       <button class="bouton" id="ida-envoyer" type="button" disabled>Envoyer vers le dépôt</button>
       <span class="note" id="ida-etat"></span>
     </div>
+    <details class="jeton" style="margin-top:6px">
+      <summary>Fichiers de référence TURPE HTA (sites, postes sources)</summary>
+      <div class="note">sites.csv : nom;type;latitude;longitude;puissance_kw;capacite_kwh (une ligne par site, type HTA ou BT ; les BT sont ignorés pour l'instant). postes_sources.csv : base Enedis avec zone TURPE 7. Le fichier envoyé remplace celui du dépôt et déclenche le recalcul.</div>
+      <div class="ligne-depot">
+        <label><input type="radio" name="fref" value="sites.csv" checked> sites.csv</label>
+        <label><input type="radio" name="fref" value="postes_sources.csv"> postes_sources.csv</label>
+        <input type="file" id="fref-fichier" accept=".csv,text/csv">
+        <button class="bouton" id="fref-envoyer" type="button">Envoyer le fichier</button>
+        <span class="note" id="fref-etat"></span>
+      </div>
+    </details>
     <details class="jeton">
       <summary>Jeton GitHub (une fois par appareil)</summary>
       <div class="note">Pour écrire dans le dépôt, la page a besoin d'un jeton personnel GitHub à ton nom : github.com, Settings, Developer settings, Personal access tokens, Fine-grained tokens, Generate new token. Repository access : Only select repositories, bess-reference. Permissions, Repository permissions, Contents : Read and write. Le jeton est conservé uniquement dans ce navigateur, jamais dans le dépôt ni sur la page publique.</div>
@@ -287,6 +310,38 @@ async function chargerDA(jour){
 }
 
 let graphePlan = null, resultatsCourants = null, capaciteKwh = 500;
+let scenariosDispo = [], raccordement = "BT", siteHta = null;
+try{ raccordement = localStorage.getItem("bess-raccordement") || "BT"; siteHta = localStorage.getItem("bess-site-hta"); }catch(e){}
+function cleScenario(){
+  if(raccordement === "BT") return "BT";
+  const htas = scenariosDispo.filter(s => s.type === "HTA");
+  const choisi = htas.find(s => s.cle === siteHta) || htas.find(s => s.cle !== "HTA_generique") || htas[0];
+  return choisi ? choisi.cle : "BT";
+}
+function majSelecteurRacc(){
+  document.querySelectorAll(".racc-btn").forEach(b => b.classList.toggle("actif", b.dataset.racc === raccordement));
+  const s = document.getElementById("site-hta");
+  s.innerHTML = "";
+  const htas = scenariosDispo.filter(sc => sc.type === "HTA");
+  for(const sc of htas){ const o = document.createElement("option"); o.value = sc.cle; o.textContent = sc.site ? sc.site : "HTA générique, poste non contraint"; s.appendChild(o); }
+  s.hidden = raccordement !== "HTA" || !htas.length;
+  const cle = cleScenario(); if(htas.find(sc => sc.cle === cle)) s.value = cle;
+}
+document.querySelectorAll(".racc-btn").forEach(b => b.addEventListener("click", () => {
+  raccordement = b.dataset.racc; try{ localStorage.setItem("bess-raccordement", raccordement); }catch(e){}
+  majSelecteurRacc(); chargerResultats(sel.value);
+}));
+document.getElementById("site-hta").addEventListener("change", e => {
+  siteHta = e.target.value; try{ localStorage.setItem("bess-site-hta", siteHta); }catch(e){}
+  chargerResultats(sel.value);
+});
+function decrireTarif(t){
+  if(!t) return "";
+  if(t.type === "BT") return `Raccordement BT > 36 kVA, grille ${t.grille}.`;
+  let s = `Raccordement HTA, ${t.site ? "site " + t.site : "cas générique"} : grille ${t.grille.replace("_", " ")}`;
+  if(t.poste) s += `, poste source ${t.poste.nom} (${t.poste.code}) à ${fmt(t.poste.distance_km,1)} km, ${t.zone_hta}`;
+  return s + ".";
+}
 const stratLabel = {optimum:"optimum", da_seul:"DA seul", afrr_seul:"aFRR seul", realiste:"réaliste, règle de 9h"};
 
 function dessinerPlan(){
@@ -352,8 +407,12 @@ async function chargerResultats(jour){
   try{
     const r = await fetch(`data/resultats/${jour}.json`, {cache:"no-store"});
     if(!r.ok){ vide.hidden=false; vide.textContent="Pas encore de calcul pour cette journée."; return; }
-    const res = await r.json();
+    const brut = await r.json();
+    if(!brut.scenarios){ vide.hidden=false; vide.textContent="Résultats d'une ancienne version : ils seront recalculés au prochain passage du robot."; return; }
+    const cle = cleScenario(), sc = brut.scenarios[cle] || brut.scenarios.BT;
+    const res = {...sc, puissance_mw: brut.puissance_mw, afrr_disponible: brut.afrr_disponible};
     resultatsCourants = res;
+    txt("note-tarif", decrireTarif(sc.tarif));
     const met = (id, sid, o, detail) => {
       if(!o || o.erreur){ txt(id, "—"); txt(sid, o && o.erreur ? "calcul impossible : " + o.erreur : "€/MW/jour"); return; }
       txt(id, fmt(o.net_eur_par_mw, 0));
@@ -495,6 +554,31 @@ document.getElementById("ida-envoyer").addEventListener("click", async () => {
   }catch(e){ etat.textContent = "Erreur réseau : " + e.message; envoyer.disabled = false; }
 });
 
+document.getElementById("fref-envoyer").addEventListener("click", async () => {
+  const etat = document.getElementById("fref-etat"), inp = document.getElementById("fref-fichier");
+  const jeton = jetonInput.value.trim();
+  if(!jeton){ etat.textContent = "Il manque le jeton GitHub (volet ci-dessous)."; return; }
+  if(!inp.files.length){ etat.textContent = "Choisis un fichier."; return; }
+  const nom = document.querySelector('input[name="fref"]:checked').value;
+  const texte = await inp.files[0].text();
+  const lignes = texte.split(/\r?\n/).filter(l => l.trim());
+  if(!lignes.length || !lignes[0].includes(";")){ etat.textContent = "Le fichier doit être un CSV séparé par des points-virgules, avec une ligne d'en-tête."; return; }
+  const chemin = `data/reference/${nom}`;
+  const url = `https://api.github.com/repos/${DEPOT.proprietaire}/${DEPOT.depot}/contents/${chemin}`;
+  const entetes = {Authorization: "Bearer " + jeton, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"};
+  etat.textContent = "Envoi en cours…";
+  try{
+    let sha = null;
+    const g = await fetch(url + "?ref=" + DEPOT.branche, {headers: entetes});
+    if(g.status === 200) sha = (await g.json()).sha;
+    const corps = {message: `${nom} déposé depuis la page (${lignes.length - 1} lignes)`, content: btoa(unescape(encodeURIComponent(texte))), branch: DEPOT.branche};
+    if(sha) corps.sha = sha;
+    const r = await fetch(url, {method:"PUT", headers: {...entetes, "Content-Type":"application/json"}, body: JSON.stringify(corps)});
+    if(!r.ok){ const err = await r.json().catch(() => ({})); etat.textContent = "Échec GitHub " + r.status + " : " + (err.message || ""); return; }
+    etat.textContent = `${nom} ${sha ? "remplacé" : "déposé"} (${lignes.length - 1} lignes). Recalcul lancé, résultats dans quelques minutes.`;
+  }catch(e){ etat.textContent = "Erreur réseau : " + e.message; }
+});
+
 function remplir(select, jours){
   for(const j of [...jours].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; select.appendChild(o); }
 }
@@ -505,6 +589,8 @@ function remplir(select, jours){
     const b = cfg.batterie, t = cfg.turpe, s = t.soutirage_eur_mwh;
     capaciteKwh = b.capacite_kwh;
     txt("note-batterie", `Batterie de référence ${b.puissance_kw} kW / ${b.capacite_kwh} kWh, SoC ${b.soc_min*100}-${b.soc_max*100} %, rendement ${b.rendement_aller_retour*100} %, ${b.cycles_max_par_jour} cycles/jour`);
+    const H = cfg.turpe_hta;
+    if(H) document.getElementById("note-turpe").insertAdjacentHTML("afterend", `<div class="note">TURPE HTA (courte utilisation, parties variables) : standard 5 plages pointe fixe ; zone soutirage : injection payée ${-H.grilles_c_eur_kwh.zone_soutirage.injection.POINTE*10} €/MWh à la pointe ; zone injection : soutirage payé ${-H.grilles_c_eur_kwh.zone_injection.soutirage.POINTE_INJ*10} €/MWh à la pointe d'injection, injection ${H.grilles_c_eur_kwh.zone_injection.injection.POINTE_INJ*10} €/MWh. Hypothèses à confirmer : ${H.hypotheses_a_confirmer.join(" ; ")}.</div>`);
     const R = cfg.strategie_realiste;
     if(R) txt("note-expost", `Règle de 9h : baisse ${R.baisse.plages.map(p=>p.join("-")).join(", ")} à ${R.baisse.part_puissance*100} % de la puissance, plancher ${R.baisse.prix_plancher_eur_mw_h} €/MW/h ; hausse ${R.hausse.plages.map(p=>p.join("-")).join(", ")} à ${R.hausse.part_puissance*100} %, plancher ${R.hausse.prix_plancher_eur_mw_h} €/MW/h. Ex post : part activée = taux national, prix moyens pondérés RTE, convention RM chap. 4 (à la baisse le fournisseur paie si le prix est positif).`);
     txt("note-turpe", `TURPE de référence : BT > 36 kVA, option ${t.option}, soutirage HPH ${s.HPH} / HCH ${s.HCH} / HPB ${s.HPB} / HCB ${s.HCB} €/MWh, injection ${t.injection_eur_mwh} €/MWh. Heures creuses ${t.heures_creuses}, saison haute novembre à mars. Composantes fixes exclues. Hypothèses à confirmer : ${t.hypotheses_a_confirmer.join(", ")}.`);
@@ -513,6 +599,8 @@ function remplir(select, jours){
     const idx = await (await fetch("data/index.json",{cache:"no-store"})).json();
     txt("maj", idx.mis_a_jour ? "dernière collecte " + idx.mis_a_jour.replace("T"," ") : "");
     idaDispo = idx.ida || {};
+    scenariosDispo = idx.scenarios || [{cle:"BT", type:"BT"}];
+    majSelecteurRacc();
     const illisibles = idx.ida_illisibles || {};
     if(Object.keys(illisibles).length) document.getElementById("note-turpe").insertAdjacentHTML("afterend", '<div class="note" style="color:var(--rouge)">Fichiers intraday illisibles : ' + Object.entries(illisibles).map(([f, e]) => f + " (" + e + ")").join(" ; ") + '</div>');
     remplir(sel, idx.jours || []);

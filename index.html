@@ -113,7 +113,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.5</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.6</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -271,6 +271,10 @@
         <label><input type="checkbox" data-serie="IDA3" disabled> IDA3</label>
         <label style="margin-left:10px" title="Prix moyen pondéré des activations aFRR à la hausse, €/MWh"><input type="checkbox" data-serie="AEUP" disabled> aFRR énergie ↑</label>
         <label title="Prix moyen pondéré des activations aFRR à la baisse, €/MWh"><input type="checkbox" data-serie="AEDN" disabled> aFRR énergie ↓</label>
+        <label style="margin-left:10px" title="Prévision RTE J-1 : consommation moins solaire moins éolien, MW, axe de droite"><input type="checkbox" data-serie="RESID" disabled> Charge résiduelle prévue</label>
+        <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="CONSO" disabled> Conso prévue</label>
+        <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="SOL" disabled> Solaire prévu</label>
+        <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="EOL" disabled> Éolien prévu</label>
       </span>
       <span class="note" id="ida-note"></span>
       <span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
@@ -464,9 +468,12 @@ async function chargerDA(){
   const unique = jours.length === 1, encheres = unique ? (idaDispo[jours[0]] || []) : [];
   const seriesEn = [];
   for(const j of jours){ const en = await lire(`data/afrr_energie/${j}.json`); if(en && en.length) seriesEn.push(en.map(p => ({cle: cleQuart(p.debut), up: p.prix_hausse_eur_mwh === null ? undefined : Number(p.prix_hausse_eur_mwh), dn: p.prix_baisse_eur_mwh === null ? undefined : Number(p.prix_baisse_eur_mwh)}))); }
+  const seriesPrev = [];
+  for(const j of jours){ const pv = await lire(`data/previsions/${j}.json`); if(pv && pv.length) seriesPrev.push(pv.map(p => ({cle: cleQuart(p.debut), resid: p.charge_residuelle_mw ?? undefined, conso: p.consommation_mw ?? undefined, sol: p.solaire_mw ?? undefined, eol: p.eolien_mw ?? undefined}))); }
   for(const cb of document.querySelectorAll('#ida-cases input[type="checkbox"]')){
     const s = cb.dataset.serie;
-    if(s === "AEUP" || s === "AEDN"){ cb.disabled = !seriesEn.length; if(cb.disabled) cb.checked = false; }
+    if(["RESID","CONSO","SOL","EOL"].includes(s)){ cb.disabled = !seriesPrev.length; if(cb.disabled) cb.checked = false; }
+    else if(s === "AEUP" || s === "AEDN"){ cb.disabled = !seriesEn.length; if(cb.disabled) cb.checked = false; }
     else if(s !== "DA"){ cb.disabled = !encheres.includes(s); if(cb.disabled) cb.checked = false; }
   }
   note.textContent = (!unique ? "Enchères intraday : sélectionner un jour unique. " : (encheres.length ? "Enchères déposées : " + encheres.join(", ") + ". " : "Aucune enchère intraday déposée pour ce jour. "))
@@ -490,8 +497,19 @@ async function chargerDA(){
     datasets.push({label:"aFRR énergie hausse, prix moyen pondéré", serie:"AEUP", data: labels.map(l => parCle.has(l) && parCle.get(l).up !== undefined ? parCle.get(l).up : null), borderColor:couleur("--hausse"), borderWidth:1.5, pointRadius:0, stepped:true, hidden: !cbU.checked});
     datasets.push({label:"aFRR énergie baisse, prix moyen pondéré", serie:"AEDN", data: labels.map(l => parCle.has(l) && parCle.get(l).dn !== undefined ? parCle.get(l).dn : null), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true, hidden: !cbD.checked});
   }
+  let axeMW = false;
+  if(seriesPrev.length){
+    const mP = moyenneParQuart(seriesPrev), parCle = new Map(mP.map(p => [p.cle, p]));
+    const def = [["RESID","resid","Charge résiduelle prévue (MW)","#f97316"],["CONSO","conso","Consommation prévue (MW)","#c9d1d9"],["SOL","sol","Solaire prévu (MW)","#eab308"],["EOL","eol","Éolien prévu (MW)","#38bdf8"]];
+    for(const [serie, champ, label, col] of def){
+      const cb = document.querySelector(`#ida-cases input[data-serie="${serie}"]`);
+      datasets.push({label, serie, unite:"MW", data: labels.map(l => parCle.has(l) && parCle.get(l)[champ] !== undefined ? parCle.get(l)[champ] : null), borderColor: col, borderWidth:1.2, pointRadius:0, yAxisID:"yMW", hidden: !(cb && cb.checked)});
+      if(cb && cb.checked) axeMW = true;
+    }
+  }
   graphe = new Chart(document.getElementById("g-da"), {type:"line", data:{labels, datasets},
-    options: opts("€/MWh", {plugins:{legend:{display:false}, tooltip:{callbacks:{label: c => c.parsed.y===null ? null : `${c.dataset.label} : ${fmt(c.parsed.y,2)} €/MWh` + (c.dataset.volumes && c.dataset.volumes[c.dataIndex] ? `, volume ${fmt(c.dataset.volumes[c.dataIndex],0)} ${c.datasetIndex===0 ? "MW" : "MWh"}` : "")}}}})});
+    options: opts("€/MWh", {plugins:{legend:{display:false}, tooltip:{callbacks:{label: c => c.parsed.y===null ? null : `${c.dataset.label} : ${fmt(c.parsed.y, c.dataset.unite === "MW" ? 0 : 2)} ${c.dataset.unite || "€/MWh"}` + (c.dataset.volumes && c.dataset.volumes[c.dataIndex] ? `, volume ${fmt(c.dataset.volumes[c.dataIndex],0)} ${c.datasetIndex===0 ? "MW" : "MWh"}` : "")}}},
+      scales:{x:{...grille, ticks:{maxTicksLimit:12}}, y:{...grille, title:{display:true,text:"€/MWh"}}, yMW:{position:"right", display: axeMW, grid:{drawOnChartArea:false}, title:{display:true,text:"MW"}}}})});
   const tri = [...prix].sort((a, b) => a - b), n = Math.min(8, tri.length);
   txt("k-da-min", fmt(Math.min(...prix), 1)); txt("k-da-max", fmt(Math.max(...prix), 1));
   if(n) txt("k-da-spread", fmt(moy(tri.slice(-n)) - moy(tri.slice(0, n)), 1));
@@ -499,6 +517,7 @@ async function chargerDA(){
 document.querySelectorAll('#ida-cases input[type="checkbox"]').forEach(cb => cb.addEventListener("change", () => {
   if(!graphe) return;
   graphe.data.datasets.forEach((d, i) => { if(d.serie === cb.dataset.serie) graphe.setDatasetVisibility(i, cb.checked); });
+  graphe.options.scales.yMW.display = graphe.data.datasets.some((d, i) => d.unite === "MW" && graphe.isDatasetVisible(i));
   graphe.update();
 }));
 

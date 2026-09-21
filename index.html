@@ -84,29 +84,47 @@
   .note{font-size:11px;color:var(--sourd)}
   footer{color:var(--sourd);font-size:11px;margin-top:24px;line-height:1.6}
   @media (max-width:700px){main,header{padding-left:12px;padding-right:12px}}
+
+  .cal{display:inline-block;background:#0f1522;border:1px solid var(--bord);border-radius:6px;padding:8px 10px;user-select:none}
+  .cal-tete{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em}
+  .cal-grille{display:grid;grid-template-columns:repeat(7,30px);gap:2px}
+  .cal-grille .dow{font-size:9px;color:var(--sourd);text-align:center;text-transform:uppercase}
+  .cal-j{height:26px;font:inherit;font-size:11px;border:1px solid transparent;border-radius:3px;background:none;color:var(--sourd);cursor:default}
+  .cal-j.dispo{color:var(--texte);border-color:var(--bord);cursor:pointer}
+  .cal-j.dispo:hover{border-color:var(--cyan)}
+  .cal-j.sel{background:rgba(34,211,238,.18);border-color:var(--cyan);color:var(--cyan);font-weight:700}
+  .cal-j.borne{background:var(--cyan);color:#0b0e14}
+  .sel-resume{font-size:13px;font-weight:700;color:var(--cyan)}
+  .replier{margin-left:0;margin-right:10px}
 </style>
 </head>
 <body>
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.4</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.5</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
 
-  <div class="bloc commande">
-    <div class="bloc-titre" style="margin-bottom:0">
-      <h2>Journée de livraison J+1</h2>
-      <label for="jour">Journée</label>
-      <span class="jour-nav"><button class="fleche" type="button" data-nav="jour" data-sens="-1" title="Jour précédent">‹</button><select id="jour"></select><button class="fleche" type="button" data-nav="jour" data-sens="1" title="Jour suivant">›</button></span>
-      <span class="racc" title="Type de raccordement de la batterie étudiée">
-        <label>Raccordement</label>
-        <button type="button" class="racc-btn" data-racc="BT">BT</button><button type="button" class="racc-btn" data-racc="HTA">HTA</button>
-        <select id="site-hta" hidden></select>
-        <button type="button" class="bouton" id="sites-importer" hidden title="Remplace data/reference/sites.csv par votre fichier">Importer mes sites</button>
-        <input type="file" id="sites-fichier" accept=".csv,text/csv" hidden>
-      </span>
+  <div class="bloc commande" id="bloc-commande">
+    <div class="bloc-titre" style="margin-bottom:0;align-items:flex-start">
+      <h2>Sélection</h2>
+      <div class="cal" id="cal">
+        <div class="cal-tete"><button class="fleche" type="button" id="cal-prec">‹</button><span id="cal-mois"></span><button class="fleche" type="button" id="cal-suiv">›</button></div>
+        <div class="cal-grille" id="cal-grille"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <span class="sel-resume" id="sel-resume">—</span>
+        <span class="note">Un clic sélectionne un jour, un second clic sur un autre jour sélectionne l'intervalle. Les jours cadrés sont ceux collectés.</span>
+        <span class="racc" style="margin-left:0" title="Type de raccordement de la batterie étudiée">
+          <label>Raccordement</label>
+          <button type="button" class="racc-btn" data-racc="BT">BT</button><button type="button" class="racc-btn" data-racc="HTA">HTA</button>
+          <select id="site-hta" hidden></select>
+          <button type="button" class="bouton" id="sites-importer" hidden title="Remplace data/reference/sites.csv par votre fichier">Importer mes sites</button>
+          <input type="file" id="sites-fichier" accept=".csv,text/csv" hidden>
+        </span>
+      </div>
     </div>
     <div class="note" id="note-batterie" style="margin-top:10px">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</div>
     <div class="note" id="note-tarif" style="color:var(--jaune)"></div>
@@ -128,39 +146,26 @@
   </div>
 
   <div class="bloc" id="bloc-revenus">
-    <div class="bloc-titre"><h2>Revenus de référence, €/MW/jour net TURPE</h2><span class="note" id="note-expost"></span></div>
-    <div class="rangee-lib">Capacité aFRR + arbitrage DA, sans énergie activée</div>
+    <div class="bloc-titre"><h2>Revenus de référence, €/MW net TURPE</h2><span class="note" id="note-expost"></span></div>
+    <div class="rangee-lib" id="lib-cap">Capacité aFRR + arbitrage DA, sans énergie activée</div>
     <div class="tuiles quatre">
-      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da">€/MW/jour net TURPE</div></div>
-      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr">€/MW/jour net TURPE</div></div>
-      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real">€/MW/jour net TURPE</div></div>
-      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt">€/MW/jour net TURPE</div></div>
+      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da"></div></div>
+      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr"></div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real"></div></div>
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt"></div></div>
     </div>
-    <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées)</div>
+    <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées, offre indexée sur le spot)</div>
     <div class="tuiles quatre" style="margin-bottom:0">
       <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">identique : aucune réserve, donc aucune activation</div></div>
-      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr">€/MW/jour total net</div></div>
-      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real">€/MW/jour total net</div></div>
-      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt">€/MW/jour total net</div></div>
+      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr"></div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real"></div></div>
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt"></div></div>
     </div>
   </div>
 
-  <div class="bloc" id="bloc-cumul">
-    <div class="bloc-titre">
-      <h2>Cumul sur plusieurs jours</h2>
-      <label for="cumul-du">Du</label><select id="cumul-du"></select>
-      <label for="cumul-au">au</label><select id="cumul-au"></select>
-      <button class="bouton" id="cumul-calculer" type="button">Cumuler</button>
-      <span class="note" id="cumul-etat"></span>
-      <span class="unite">€/MW · raccordement sélectionné</span>
-    </div>
-    <div class="tuiles quatre" id="cumul-tuiles" hidden>
-      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="c-da">—</div><div class="sub" id="cs-da"></div></div>
-      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="c-afrr">—</div><div class="sub" id="cs-afrr"></div></div>
-      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="c-real">—</div><div class="sub" id="cs-real"></div></div>
-      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="c-opt">—</div><div class="sub" id="cs-opt"></div></div>
-    </div>
-    <div class="graphe" id="cumul-graphe-cadre" hidden><canvas id="g-cumul"></canvas></div>
+  <div class="bloc" id="bloc-parjour" hidden>
+    <div class="bloc-titre"><h2>Détail par jour, total avec énergie</h2><span class="unite">€/MW/jour</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
+    <div class="graphe"><canvas id="g-parjour"></canvas></div>
   </div>
 
   <div class="tuiles">
@@ -169,11 +174,11 @@
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">DA min</div><div class="val" id="k-da-min">—</div><div class="sub">€/MWh</div></div>
     <div class="tuile" style="--coul:var(--jaune)"><div class="lib">DA max</div><div class="val" id="k-da-max">—</div><div class="sub">€/MWh</div></div>
     <div class="tuile" style="--coul:var(--rose)"><div class="lib">Spread DA 2h</div><div class="val" id="k-da-spread">—</div><div class="sub">€/MWh, 2 h les plus chères moins 2 h les moins chères</div></div>
-    <div class="tuile" style="--coul:var(--violet)"><div class="lib">aFRR baisse, moyenne</div><div class="val" id="k-afrr-down">—</div><div class="sub">€/MW/h sur la journée</div></div>
-    <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR hausse, moyenne</div><div class="val" id="k-afrr-up">—</div><div class="sub">€/MW/h sur la journée</div></div>
+    <div class="tuile" style="--coul:var(--violet)"><div class="lib">aFRR baisse, moyenne</div><div class="val" id="k-afrr-down">—</div><div class="sub">€/MW/h</div></div>
+    <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR hausse, moyenne</div><div class="val" id="k-afrr-up">—</div><div class="sub">€/MW/h</div></div>
   </div>
 
-  <div class="bloc">
+  <div class="bloc" id="bloc-prix">
     <div class="bloc-titre"><h2>Prix spot France : day-ahead et enchères intraday</h2>
       <span id="ida-cases">
         <label><input type="checkbox" data-serie="DA" checked> DA</label>
@@ -188,7 +193,7 @@
 
   <div class="bloc" id="bloc-depot">
     <div class="bloc-titre">
-      <h2>Déposer une enchère intraday pour la journée sélectionnée</h2>
+      <h2>Déposer une enchère intraday</h2><span class="sel-resume" id="depot-jour"></span>
       <label><input type="radio" name="ench" value="IDA1" checked> IDA1</label>
       <label><input type="radio" name="ench" value="IDA2"> IDA2</label>
       <label><input type="radio" name="ench" value="IDA3"> IDA3</label>
@@ -221,28 +226,28 @@
     </details>
   </div>
 
-  <div class="bloc">
+  <div class="bloc" id="bloc-afrr">
     <div class="bloc-titre"><h2>Prix marginal aFRR capacité, appel d'offres journalier</h2><span class="unite">€/MW/h · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
     <div class="graphe"><canvas id="g-afrr"></canvas></div><div class="vide" id="vide-afrr" hidden></div>
   </div>
 
-  <div class="bloc plan">
+  <div class="bloc plan" id="bloc-plan">
     <div class="bloc-titre">
       <h2>Plan de la batterie</h2>
       <label><input type="radio" name="strat" value="optimum" checked> Optimum</label>
       <label><input type="radio" name="strat" value="da_seul"> DA seul</label>
       <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
       <label><input type="radio" name="strat" value="realiste"> Réaliste</label>
-      <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (offre en énergie indexée sur le spot du quart d'heure, plafonds SoC et cycles).</span>
+      <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (offre indexée sur le spot, plafonds SoC et cycles). En multi-jours : moyenne par quart d'heure.</span>
       <span class="unite">kW et SoC % · pas 15 min</span>
       <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
     </div>
     <div class="graphe"><canvas id="g-plan"></canvas></div><div class="vide" id="vide-plan" hidden></div>
   </div>
 
-  <hr class="separateur" data-label="Analyse des activations aFRR énergie, données passées">
+  <hr class="separateur" data-label="Analyse des activations aFRR énergie, données passées, journalier">
 
-  <div class="bloc deux energie">
+  <div class="bloc deux energie" id="bloc-energie">
     <div class="bloc-titre">
       <h2>Activations aFRR énergie, journée passée</h2>
       <label for="jour-energie">Journée</label>
@@ -270,26 +275,27 @@ Chart.defaults.font.family = '"JetBrains Mono", Consolas, monospace';
 Chart.defaults.font.size = 11;
 Chart.defaults.borderColor = "#1f2a3a";
 Chart.defaults.interaction = {mode:"index", intersect:false};
+Chart.defaults.elements.point.hitRadius = 12;
+Chart.defaults.elements.line.borderWidth = 1.5;
 Chart.defaults.maintainAspectRatio = false;
+
+// ----- blocs repliables (bouton à gauche du titre) et plein écran
 document.querySelectorAll(".bloc").forEach((b, i) => {
-  const titre = b.querySelector(".bloc-titre"); if(!titre || b.classList.contains("commande")) return;
+  const titre = b.querySelector(".bloc-titre"); if(!titre) return;
   const id = b.id || ("bloc-" + i); b.id = id;
   const btn = document.createElement("button"); btn.className = "replier"; btn.type = "button"; btn.title = "Replier ou déplier ce bloc";
   const maj = () => btn.textContent = b.classList.contains("replie") ? "▸" : "▾";
   try{ if(localStorage.getItem("bess-replie-" + id) === "1") b.classList.add("replie"); }catch(e){}
   maj();
   btn.addEventListener("click", () => { b.classList.toggle("replie"); maj(); try{ localStorage.setItem("bess-replie-" + id, b.classList.contains("replie") ? "1" : "0"); }catch(e){} });
-  titre.appendChild(btn);
+  titre.insertBefore(btn, titre.firstChild);
 });
 document.querySelectorAll(".agrandir").forEach(b => b.addEventListener("click", () => {
   const bloc = b.closest(".bloc");
   if(document.fullscreenElement) document.exitFullscreen(); else bloc.requestFullscreen();
 }));
-Chart.defaults.elements.point.hitRadius = 12;
-Chart.defaults.elements.line.borderWidth = 1.5;
 
-const sel = document.getElementById("jour"), selEn = document.getElementById("jour-energie");
-let graphe = null, grapheAfrr = null, grapheVol = null, graphePrixEn = null;
+// ----- utilitaires
 const couleur = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const fmtParis = new Intl.DateTimeFormat("fr-FR", {hour:"2-digit", minute:"2-digit", timeZone:"Europe/Paris"});
 const heureParis = iso => fmtParis.format(new Date(iso));
@@ -297,67 +303,79 @@ const parDate = (a, b) => new Date(a.debut) - new Date(b.debut);
 const somme = (arr, f) => arr.reduce((s, p) => s + (Number(f(p)) || 0), 0);
 const moy = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
 const fmt = (v, d=0) => (v===null || v===undefined || isNaN(v)) ? "—" : Number(v).toLocaleString("fr-FR", {maximumFractionDigits:d});
-const txt = (id, v) => document.getElementById(id).textContent = v;
+const txt = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
 const grille = {grid:{color:"#1a2231"}};
 const opts = (yTitre, extra={}) => ({responsive:true, plugins:{legend:{position:"bottom"}},
   scales:{x:{...grille, ticks:{maxTicksLimit:12}}, y:{...grille, title:{display:true,text:yTitre}}}, ...extra});
-
-let idaDispo = {};
-const couleursIda = {IDA1:"#f97316", IDA2:"#ec4899", IDA3:"#eab308"};
-async function chargerDA(jour){
-  const vide = document.getElementById("vide-da");
-  if(graphe){ graphe.destroy(); graphe = null; }
-  const encheres = idaDispo[jour] || [];
-  const note = document.getElementById("ida-note");
-  note.textContent = encheres.length ? "" : "Aucune enchère intraday déposée pour ce jour.";
-  for(const cb of document.querySelectorAll('#ida-cases input[type="checkbox"]')){
-    const s = cb.dataset.serie;
-    if(s !== "DA"){ cb.disabled = !encheres.includes(s); if(cb.disabled) cb.checked = false; }
+const cleQuart = iso => { const d = new Date(iso); return fmtParis.format(d); };   // "HH:MM" Paris : clé de moyenne multi-jours
+const ORDRE_QUARTS = Array.from({length:96}, (_, i) => String(Math.floor(i/4)).padStart(2,"0") + ":" + String((i%4)*15).padStart(2,"0"));
+function moyenneParQuart(series){
+  // series : liste de tableaux de points {cle:"HH:MM", ...valeurs numériques} ; renvoie un point moyen par quart d'heure
+  const acc = new Map();
+  for(const pts of series) for(const p of pts){
+    const a = acc.get(p.cle) || {n:0}; a.n++;
+    for(const k in p) if(k !== "cle" && typeof p[k] === "number") a[k] = (a[k] || 0) + p[k];
+    acc.set(p.cle, a);
   }
-  for(const id of ["k-da-min","k-da-max","k-da-spread"]) txt(id, "—");
-  const r = await fetch(`data/da/${jour}.json`, {cache:"no-store"});
-  if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée day-ahead pour cette journée."; return; }
-  vide.hidden=true;
-  const pts = (await r.json()).sort(parDate);
-  const prix = pts.map(p => Number(p.prix));
-  const cle = p => Math.round(new Date(p.debut).getTime()/60000);
-  const index = new Map(pts.map((p, i) => [cle(p), i]));
-  const cbDA = document.querySelector('#ida-cases input[data-serie="DA"]');
-  const datasets = [{label:"Day-ahead", serie:"DA", data:prix, borderColor:couleur("--da"), borderWidth:1.5, pointRadius:0, stepped:true, hidden: !(cbDA && cbDA.checked), volumes: pts.map(p => p.volume_mw)}];
-  for(const e of encheres){
-    try{
-      const ida = await (await fetch(`data/ida/${jour}-${e}.json`, {cache:"no-store"})).json();
-      const serie = new Array(pts.length).fill(null), vol = new Array(pts.length).fill(null);
-      for(const p of ida.points){ const i = index.get(cle(p)); if(i !== undefined){ serie[i] = p.prix; vol[i] = p.volume_mwh; } }
-      const cb = document.querySelector(`#ida-cases input[data-serie="${e}"]`);
-      datasets.push({label: e + (ida.complet ? "" : " (incomplet)"), serie: e, data: serie, borderColor: couleursIda[e] || "#fff", borderWidth:1.2, borderDash:[3,3], pointRadius:0, stepped:true, hidden: !(cb && cb.checked), volumes: vol});
-    }catch(err){ console.warn("IDA", e, err); }
-  }
-  graphe = new Chart(document.getElementById("g-da"), {
-    type:"line",
-    data:{labels: pts.map(p => heureParis(p.debut)), datasets},
-    options: opts("€/MWh", {plugins:{legend:{display:false},
-      tooltip:{callbacks:{label: c => c.parsed.y===null ? null : `${c.dataset.label} : ${fmt(c.parsed.y,2)} €/MWh` + (c.dataset.volumes && c.dataset.volumes[c.dataIndex]!==null ? `, volume ${fmt(c.dataset.volumes[c.dataIndex],0)} ${c.datasetIndex===0 ? "MW" : "MWh"}` : "")}}}})
-  });
-  if(encheres.length) note.textContent = "Enchères déposées : " + encheres.join(", ") + ". Cocher pour superposer, décocher pour effacer.";
-  const tri = [...prix].sort((a, b) => a - b), n = Math.min(8, tri.length);   // 8 pas de 15 min = 2 h
-  txt("k-da-min", fmt(Math.min(...prix), 1)); txt("k-da-max", fmt(Math.max(...prix), 1));
-  if(n) txt("k-da-spread", fmt(moy(tri.slice(-n)) - moy(tri.slice(0, n)), 1));
+  return ORDRE_QUARTS.filter(q => acc.has(q)).map(q => { const a = acc.get(q); const o = {cle:q}; for(const k in a) if(k !== "n") o[k] = a[k] / a.n; return o; });
 }
 
-let graphePlan = null, resultatsCourants = null, capaciteKwh = 500;
-let scenariosDispo = [], raccordement = "BT", siteHta = null;
+// ----- état global
+let idx = {}, joursDispo = [], scenariosDispo = [{cle:"BT", type:"BT"}], idaDispo = {}, capaciteKwh = 500;
+let selection = {du:null, au:null}, raccordement = "BT", siteHta = null;
 try{ raccordement = localStorage.getItem("bess-raccordement") || "BT"; siteHta = localStorage.getItem("bess-site-hta"); }catch(e){}
+const joursSelection = () => joursDispo.filter(j => selection.du && j >= selection.du && j <= selection.au);
+const jourDepot = () => selection.au || (joursDispo.length ? joursDispo[joursDispo.length-1] : "");
 function cleScenario(){
   if(raccordement === "BT") return "BT";
   const htas = scenariosDispo.filter(s => s.type === "HTA");
   const choisi = htas.find(s => s.cle === siteHta) || htas.find(s => s.cle !== "HTA_generique") || htas[0];
   return choisi ? choisi.cle : "BT";
 }
+function decrireTarif(t){
+  if(!t) return "";
+  if(t.type === "BT") return `Raccordement BT > 36 kVA, grille ${t.grille}.`;
+  let s = `Raccordement HTA, ${t.site ? "site " + t.site : "cas générique"} : grille ${t.grille.replace("_", " ")}`;
+  if(t.poste) s += `, poste source ${t.poste.nom} (${t.poste.code}) à ${fmt(t.poste.distance_km,1)} km, ${t.zone_hta}`;
+  return s + ".";
+}
+
+// ----- calendrier
+let calMois = null;   // Date du 1er du mois affiché
+function dessinerCal(){
+  const g = document.getElementById("cal-grille"); g.innerHTML = "";
+  const m = calMois;
+  document.getElementById("cal-mois").textContent = m.toLocaleDateString("fr-FR", {month:"long", year:"numeric"});
+  for(const d of ["lu","ma","me","je","ve","sa","di"]){ const e = document.createElement("div"); e.className = "dow"; e.textContent = d; g.appendChild(e); }
+  const premier = new Date(m.getFullYear(), m.getMonth(), 1), decal = (premier.getDay() + 6) % 7;
+  for(let i = 0; i < decal; i++) g.appendChild(document.createElement("div"));
+  const nb = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  for(let d = 1; d <= nb; d++){
+    const iso = `${m.getFullYear()}-${String(m.getMonth()+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const b = document.createElement("button"); b.type = "button"; b.className = "cal-j"; b.textContent = d;
+    if(joursDispo.includes(iso)){
+      b.classList.add("dispo");
+      if(selection.du && iso >= selection.du && iso <= selection.au) b.classList.add("sel");
+      if(iso === selection.du || iso === selection.au) b.classList.add("borne");
+      b.addEventListener("click", () => cliquerJour(iso));
+    }
+    g.appendChild(b);
+  }
+}
+function cliquerJour(iso){
+  if(!selection.du || selection.du !== selection.au) selection = {du: iso, au: iso};      // nouveau départ
+  else if(iso === selection.du) selection = {du: iso, au: iso};
+  else selection = {du: iso < selection.du ? iso : selection.du, au: iso > selection.du ? iso : selection.du};
+  try{ localStorage.setItem("bess-selection", JSON.stringify(selection)); }catch(e){}
+  dessinerCal(); rafraichir();
+}
+document.getElementById("cal-prec").addEventListener("click", () => { calMois = new Date(calMois.getFullYear(), calMois.getMonth() - 1, 1); dessinerCal(); });
+document.getElementById("cal-suiv").addEventListener("click", () => { calMois = new Date(calMois.getFullYear(), calMois.getMonth() + 1, 1); dessinerCal(); });
+
+// ----- raccordement
 function majSelecteurRacc(){
   document.querySelectorAll(".racc-btn").forEach(b => b.classList.toggle("actif", b.dataset.racc === raccordement));
-  const s = document.getElementById("site-hta");
-  s.innerHTML = "";
+  const s = document.getElementById("site-hta"); s.innerHTML = "";
   const htas = scenariosDispo.filter(sc => sc.type === "HTA");
   for(const sc of htas){ const o = document.createElement("option"); o.value = sc.cle; o.textContent = sc.site ? sc.site : "HTA générique, poste non contraint"; s.appendChild(o); }
   s.hidden = raccordement !== "HTA" || !htas.length;
@@ -366,60 +384,183 @@ function majSelecteurRacc(){
 }
 document.querySelectorAll(".racc-btn").forEach(b => b.addEventListener("click", () => {
   raccordement = b.dataset.racc; try{ localStorage.setItem("bess-raccordement", raccordement); }catch(e){}
-  majSelecteurRacc(); chargerResultats(sel.value);
+  majSelecteurRacc(); chargerResultats();
 }));
-document.getElementById("site-hta").addEventListener("change", e => {
-  siteHta = e.target.value; try{ localStorage.setItem("bess-site-hta", siteHta); }catch(e){}
-  chargerResultats(sel.value);
-});
-function decrireTarif(t){
-  if(!t) return "";
-  if(t.type === "BT") return `Raccordement BT > 36 kVA, grille ${t.grille}.`;
-  let s = `Raccordement HTA, ${t.site ? "site " + t.site : "cas générique"} : grille ${t.grille.replace("_", " ")}`;
-  if(t.poste) s += `, poste source ${t.poste.nom} (${t.poste.code}) à ${fmt(t.poste.distance_km,1)} km, ${t.zone_hta}`;
-  return s + ".";
+document.getElementById("site-hta").addEventListener("change", e => { siteHta = e.target.value; try{ localStorage.setItem("bess-site-hta", siteHta); }catch(e){} chargerResultats(); });
+
+// ----- chargement des fichiers d'une sélection
+const cache = new Map();
+async function lire(chemin){
+  if(cache.has(chemin)) return cache.get(chemin);
+  const r = await fetch(chemin, {cache:"no-store"});
+  const v = r.ok ? await r.json() : null;
+  cache.set(chemin, v); return v;
 }
+
+// ----- prix DA (+ IDA sur jour unique)
+let graphe = null;
+const couleursIda = {IDA1:"#f97316", IDA2:"#ec4899", IDA3:"#eab308"};
+async function chargerDA(){
+  const jours = joursSelection(), vide = document.getElementById("vide-da"), note = document.getElementById("ida-note");
+  if(graphe){ graphe.destroy(); graphe = null; }
+  for(const id of ["k-da-min","k-da-max","k-da-spread"]) txt(id, "—");
+  const unique = jours.length === 1, encheres = unique ? (idaDispo[jours[0]] || []) : [];
+  for(const cb of document.querySelectorAll('#ida-cases input[type="checkbox"]')){
+    const s = cb.dataset.serie; if(s !== "DA"){ cb.disabled = !encheres.includes(s); if(cb.disabled) cb.checked = false; }
+  }
+  note.textContent = !unique ? "Enchères intraday : sélectionner un jour unique." : (encheres.length ? "Enchères déposées : " + encheres.join(", ") + "." : "Aucune enchère intraday déposée pour ce jour.");
+  const series = [], vols = [];
+  for(const j of jours){ const pts = await lire(`data/da/${j}.json`); if(pts) series.push(pts.map(p => ({cle: cleQuart(p.debut), prix: Number(p.prix), volume: Number(p.volume_mw) || 0}))); }
+  if(!series.length){ vide.hidden = false; vide.textContent = "Aucune donnée day-ahead pour la sélection."; return; }
+  vide.hidden = true;
+  const m = moyenneParQuart(series), prix = m.map(p => p.prix), labels = m.map(p => p.cle);
+  const cbDA = document.querySelector('#ida-cases input[data-serie="DA"]');
+  const datasets = [{label: unique ? "Day-ahead" : `Day-ahead, moyenne de ${series.length} jours`, serie:"DA", data:prix, borderColor:couleur("--da"), borderWidth:1.5, pointRadius:0, stepped:true, hidden: !cbDA.checked, volumes: m.map(p => p.volume)}];
+  if(unique) for(const e of encheres){
+    const ida = await lire(`data/ida/${jours[0]}-${e}.json`); if(!ida) continue;
+    const parCle = new Map(ida.points.map(p => [cleQuart(p.debut), p]));
+    const cb = document.querySelector(`#ida-cases input[data-serie="${e}"]`);
+    datasets.push({label: e + (ida.complet ? "" : " (incomplet)"), serie: e, data: labels.map(l => parCle.has(l) ? parCle.get(l).prix : null), borderColor: couleursIda[e], borderWidth:1.2, borderDash:[3,3], pointRadius:0, stepped:true, hidden: !(cb && cb.checked), volumes: labels.map(l => parCle.has(l) ? parCle.get(l).volume_mwh : null)});
+  }
+  graphe = new Chart(document.getElementById("g-da"), {type:"line", data:{labels, datasets},
+    options: opts("€/MWh", {plugins:{legend:{display:false}, tooltip:{callbacks:{label: c => c.parsed.y===null ? null : `${c.dataset.label} : ${fmt(c.parsed.y,2)} €/MWh` + (c.dataset.volumes && c.dataset.volumes[c.dataIndex] ? `, volume ${fmt(c.dataset.volumes[c.dataIndex],0)} ${c.datasetIndex===0 ? "MW" : "MWh"}` : "")}}}})});
+  const tri = [...prix].sort((a, b) => a - b), n = Math.min(8, tri.length);
+  txt("k-da-min", fmt(Math.min(...prix), 1)); txt("k-da-max", fmt(Math.max(...prix), 1));
+  if(n) txt("k-da-spread", fmt(moy(tri.slice(-n)) - moy(tri.slice(0, n)), 1));
+}
+document.querySelectorAll('#ida-cases input[type="checkbox"]').forEach(cb => cb.addEventListener("change", () => {
+  if(!graphe) return;
+  graphe.data.datasets.forEach((d, i) => { if(d.serie === cb.dataset.serie) graphe.setDatasetVisibility(i, cb.checked); });
+  graphe.update();
+}));
+
+// ----- aFRR capacité
+let grapheAfrr = null;
+async function chargerAfrr(){
+  const jours = joursSelection(), vide = document.getElementById("vide-afrr");
+  if(grapheAfrr){ grapheAfrr.destroy(); grapheAfrr = null; }
+  txt("k-afrr-up", "—"); txt("k-afrr-down", "—");
+  const series = [];
+  for(const j of jours){
+    const tous = await lire(`data/afrr_capacite/${j}.json`); if(!tous) continue;
+    const daily = tous.filter(p => String(p.horizon).toUpperCase()==="DAILY"), pts = daily.length ? daily : tous;
+    const parCle = new Map();
+    for(const p of pts){ const k = cleQuart(p.debut), o = parCle.get(k) || {cle:k}; const v = Number(p.prix_eur_mw_15min ?? p.prix_eur_mw_h);
+      if(/UP/i.test(p.sens) && !/DOWN/i.test(p.sens)) o.up = v; else if(/DOWN/i.test(p.sens)) o.down = v; parCle.set(k, o); }
+    series.push([...parCle.values()]);
+  }
+  if(!series.length){ vide.hidden = false; vide.textContent = "Aucune donnée aFRR capacité pour la sélection."; return; }
+  vide.hidden = true;
+  const m = moyenneParQuart(series);
+  grapheAfrr = new Chart(document.getElementById("g-afrr"), {type:"line", data:{labels: m.map(p => p.cle), datasets:[
+    {label:"Hausse", data:m.map(p => p.up ?? null), borderColor:couleur("--hausse"), borderWidth:1.5, borderDash:[6,3], pointRadius:0, stepped:true},
+    {label:"Baisse", data:m.map(p => p.down ?? null), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true}]},
+    options: opts("€/MW/h", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${c.parsed.y===null ? "—" : fmt(c.parsed.y,2)} €/MW/h`}}}})});
+  txt("k-afrr-up", fmt(moy(m.map(p => p.up).filter(v => v !== undefined)), 1));
+  txt("k-afrr-down", fmt(moy(m.map(p => p.down).filter(v => v !== undefined)), 1));
+}
+
+// ----- résultats : cumul sur la sélection, plan moyen
+let graphePlan = null, grapheParJour = null, resultatsCourants = null;
 const stratLabel = {optimum:"optimum", da_seul:"DA seul", afrr_seul:"aFRR seul", realiste:"réaliste, règle de 9h"};
+const STRATS = ["da_seul", "afrr_seul", "realiste", "optimum"], IDS = {da_seul:"da", afrr_seul:"afrr", realiste:"real", optimum:"opt"};
+async function chargerResultats(){
+  const jours = joursSelection(), vide = document.getElementById("vide-plan");
+  if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
+  if(grapheParJour){ grapheParJour.destroy(); grapheParJour = null; }
+  resultatsCourants = null;
+  for(const s of STRATS){ txt("v-" + IDS[s], "—"); txt("s-" + IDS[s], ""); txt("x-" + IDS[s], "—"); if(s !== "da_seul") txt("xs-" + IDS[s], ""); }
+  txt("t-da", "—"); txt("t-real", "—");
+  document.getElementById("bloc-parjour").hidden = jours.length <= 1;
+  const cle = cleScenario();
+  const lus = [];   // [{jour, sc}]
+  for(const j of jours){ const r = await lire(`data/resultats/${j}.json`); if(r && r.scenarios){ const sc = r.scenarios[cle] || r.scenarios.BT; if(sc) lus.push({jour:j, sc, puissance: r.puissance_mw, afrr: r.afrr_disponible}); } }
+  if(!lus.length){ vide.hidden = false; vide.textContent = "Pas encore de calcul pour la sélection."; return; }
+  vide.hidden = true;
+  const n = lus.length, unique = n === 1;
+  txt("note-tarif", decrireTarif(lus[0].sc.tarif));
+  txt("lib-cap", unique ? "Capacité aFRR + arbitrage DA, sans énergie activée" : `Capacité aFRR + arbitrage DA, sans énergie activée · total sur ${n} jours (moyenne par jour entre parenthèses)`);
+  const tot = {}, totX = {}, nbX = {}, part = {}, turpe = {}, cyc = {}, parJour = {};
+  for(const s of STRATS){ tot[s] = 0; totX[s] = 0; nbX[s] = 0; part[s] = 0; turpe[s] = 0; cyc[s] = 0; parJour[s] = []; }
+  for(const l of lus) for(const s of STRATS){
+    const o = l.sc[s], cap = o && !o.erreur ? o.net_eur_par_mw : 0;
+    const xp = l.sc.ex_post && l.sc.ex_post[s], en = xp ? xp.complement_net_eur_par_mw : 0;
+    tot[s] += cap; totX[s] += en; if(xp){ nbX[s]++; if(xp.partiel) part[s]++; }
+    if(o && !o.erreur){ turpe[s] += o.turpe_eur / l.puissance; cyc[s] += o.cycles; }
+    parJour[s].push(cap + en);
+  }
+  const parJ = v => unique ? "" : ` (${fmt(v / n, 0)}/j)`;
+  for(const s of STRATS){
+    txt("v-" + IDS[s], fmt(tot[s], 0));
+    const o0 = lus[0].sc[s];
+    let det = unique && o0 && !o0.erreur ? (s === "da_seul" ? `TURPE ${fmt(o0.turpe_eur/lus[0].puissance,0)} €/MW, ${fmt(o0.cycles,2)} cycles` :
+      `brut ${fmt(o0.brut_eur_par_mw,0)} · DA ${fmt(o0.da_brut_eur/lus[0].puissance,0)}, aFRR ↓ ${fmt(o0.afrr_baisse_eur/lus[0].puissance,0)}, ↑ ${fmt(o0.afrr_hausse_eur/lus[0].puissance,0)}, TURPE ${fmt(o0.turpe_eur/lus[0].puissance,0)}, ${fmt(o0.cycles,2)} cycles` + (o0.regle ? `, ${o0.regle.blocs_baisse_retenus} h ↓ / ${o0.regle.blocs_hausse_retenus} h ↑ retenues` : ""))
+      : `€/MW net TURPE${parJ(tot[s])} · TURPE ${fmt(turpe[s],0)} €/MW, ${fmt(cyc[s]/n,2)} cycles/j`;
+    if(unique && o0 && o0.erreur) det = "calcul impossible : " + o0.erreur;
+    txt("s-" + IDS[s], det);
+    txt("x-" + IDS[s], fmt(tot[s] + totX[s], 0));
+    if(s !== "da_seul"){
+      const x0 = unique ? lus[0].sc.ex_post && lus[0].sc.ex_post[s] : null;
+      txt("xs-" + IDS[s], x0 ? `€/MW ${x0.partiel ? "provisoire, " + x0.pas_couverts + "/96 pas publiés" : "total net"} · énergie ${x0.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(x0.complement_net_eur_par_mw,0)} (↑ ${fmt(x0.energie_hausse_kwh,0)} kWh, ↓ ${fmt(x0.energie_baisse_kwh,0)} kWh) · refusé pour tenir SoC et cycles : ↑ ${fmt(x0.refusee_hausse_kwh,0)} ↓ ${fmt(x0.refusee_baisse_kwh,0)} kWh · ${fmt(x0.cycles_reels,2)} cycles · écart SoC fin ${x0.ecart_soc_fin_kwh >= 0 ? "+" : ""}${fmt(100*x0.ecart_soc_fin_kwh/capaciteKwh,1)} pt`
+        : unique ? "en attente des activations de la journée" : `€/MW total${parJ(tot[s] + totX[s])} · énergie ${totX[s] >= 0 ? "+" : ""}${fmt(totX[s],0)} sur ${nbX[s]} j${part[s] ? ", " + part[s] + " provisoires" : ""}`);
+      if(unique && s === "afrr_seul" && lus[0].sc.ex_post && lus[0].sc.ex_post.afrr_seul_100){ const v = lus[0].sc.ex_post.afrr_seul_100; document.getElementById("xs-afrr").textContent += ` · si nos offres en énergie sont retenues à 100 % : ${fmt(v.total_net_eur_par_mw,0)} €/MW (énergie ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)}, refusé ↑ ${fmt(v.refusee_hausse_kwh,0)} ↓ ${fmt(v.refusee_baisse_kwh,0)} kWh, ${fmt(v.cycles_reels,2)} cycles)`; }
+    }
+  }
+  txt("t-da", fmt(turpe.da_seul / n, 0)); txt("t-real", fmt(turpe.realiste / n, 0));
+  if(!lus[0].afrr) txt("s-afrr", "prix aFRR capacité non collectés");
+  if(!unique){
+    const noms = {da_seul:"DA seul", afrr_seul:"aFRR seul + énergie", realiste:"Réaliste + énergie", optimum:"Optimum + énergie"};
+    const coul = {da_seul: couleur("--cyan"), afrr_seul: couleur("--vert"), realiste: couleur("--orange"), optimum: "#c9d1d9"};
+    grapheParJour = new Chart(document.getElementById("g-parjour"), {type:"bar", data:{labels: lus.map(l => l.jour), datasets: STRATS.map(s => ({label: noms[s], data: parJour[s], backgroundColor: coul[s]}))},
+      options: opts("€/MW/jour", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${fmt(c.parsed.y,0)} €/MW`}}}})});
+  }
+  // plan moyen par stratégie
+  resultatsCourants = {lus, n};
+  dessinerPlan();
+}
 
 function dessinerPlan(){
   const vide = document.getElementById("vide-plan");
   if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
-  const strat = document.querySelector('input[name="strat"]:checked').value;
-  const res = resultatsCourants;
-  const o = res && res[strat];
-  const plan = (o && o.plan) || [];
-  if(!plan.length){ vide.hidden=false; vide.textContent = o && o.erreur ? "Calcul impossible : " + o.erreur : "Pas de plan disponible."; return; }
+  if(!resultatsCourants) return;
+  const strat = document.querySelector('input[name="strat"]:checked').value, {lus, n} = resultatsCourants;
+  const series = [], xps = [];
+  for(const l of lus){
+    const o = l.sc[strat]; if(!o || o.erreur || !o.plan) continue;
+    const xp = l.sc.ex_post && l.sc.ex_post[strat];
+    series.push(o.plan.map((p, i) => ({cle: cleQuart(p.debut), soutirage: p.soutirage_kw, injection: p.injection_kw, ru: p.reserve_hausse_kw, rd: p.reserve_baisse_kw, soc: p.soc_kwh, prix: p.prix_da, turpe: p.turpe, turpe_inj: p.turpe_inj || 0,
+      act_up: xp && xp.active_hausse_kw ? xp.active_hausse_kw[i] : 0, act_dn: xp && xp.active_baisse_kw ? xp.active_baisse_kw[i] : 0, soc_reel: xp && xp.soc_reel_kwh ? xp.soc_reel_kwh[i] : null})));
+    if(xp) xps.push(xp);
+  }
+  if(!series.length){ vide.hidden = false; vide.textContent = "Pas de plan disponible pour cette stratégie."; return; }
   vide.hidden = true;
-  const labels = plan.map(p => heureParis(p.debut));
-  const socPct = plan.map(p => 100 * p.soc_kwh / capaciteKwh);
-  const revenuPas = p => (p.injection_kw * p.prix_da - p.soutirage_kw * (p.prix_da + p.turpe)) * 0.25 / 1000;
-  const xpS = res.ex_post && res.ex_post[strat] && res.ex_post[strat].active_hausse_kw ? res.ex_post[strat] : null;
+  const m = moyenneParQuart(series), labels = m.map(p => p.cle), avecAct = xps.length > 0;
   graphePlan = new Chart(document.getElementById("g-plan"), {
     data:{labels, datasets:[
-      {type:"bar", label:"Soutirage DA, achat sur le marché (kW)", data:plan.map(p => -p.soutirage_kw), backgroundColor:"rgba(239,68,68,.7)", yAxisID:"y", stack:"p"},
-      {type:"bar", label:"Injection DA, vente sur le marché (kW)", data:plan.map(p => p.injection_kw), backgroundColor:"rgba(34,211,238,.7)", yAxisID:"y", stack:"p"},
-      ...(xpS ? [
-        {type:"bar", label:"Soutirage par activation aFRR baisse, estimé (kW)", data:xpS.active_baisse_kw.map(v => -v), backgroundColor:"rgba(167,139,250,.75)", yAxisID:"y", stack:"p"},
-        {type:"bar", label:"Injection par activation aFRR hausse, estimée (kW)", data:xpS.active_hausse_kw, backgroundColor:"rgba(34,197,94,.75)", yAxisID:"y", stack:"p"}] : []),
-      {type:"line", label:"Réserve aFRR baisse, capacité (kW)", data:plan.map(p => -p.reserve_baisse_kw), borderColor:couleur("--baisse"), borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
-      {type:"line", label:"Réserve aFRR hausse, capacité (kW)", data:plan.map(p => p.reserve_hausse_kw), borderColor:couleur("--hausse"), borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
-      {type:"line", label:"SoC planifié (%)", data:socPct, borderColor:couleur("--jaune"), borderWidth:2, pointRadius:0, yAxisID:"y2"},
-      ...(res.ex_post && res.ex_post[strat] ? [{type:"line", label:"SoC réel avec activations estimées (%)", data:res.ex_post[strat].soc_reel_kwh.map(v => 100*v/capaciteKwh), borderColor:couleur("--rouge"), borderWidth:1.5, borderDash:[2,3], pointRadius:0, yAxisID:"y2"}] : [])]},
-    options:{responsive:true, plugins:{legend:{position:"bottom"}, title:{display:true, text:`Stratégie : ${stratLabel[strat]}`, color:"#c9d1d9", font:{weight:"normal"}},
+      {type:"bar", label:"Soutirage DA, achat sur le marché (kW)", data:m.map(p => -p.soutirage), backgroundColor:"rgba(239,68,68,.7)", yAxisID:"y", stack:"p"},
+      {type:"bar", label:"Injection DA, vente sur le marché (kW)", data:m.map(p => p.injection), backgroundColor:"rgba(34,211,238,.7)", yAxisID:"y", stack:"p"},
+      ...(avecAct ? [
+        {type:"bar", label:"Soutirage par activation aFRR baisse, estimé (kW)", data:m.map(p => -(p.act_dn||0)), backgroundColor:"rgba(167,139,250,.75)", yAxisID:"y", stack:"p"},
+        {type:"bar", label:"Injection par activation aFRR hausse, estimée (kW)", data:m.map(p => p.act_up||0), backgroundColor:"rgba(34,197,94,.75)", yAxisID:"y", stack:"p"}] : []),
+      {type:"line", label:"Réserve aFRR baisse, capacité (kW)", data:m.map(p => -p.rd), borderColor:couleur("--baisse"), borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
+      {type:"line", label:"Réserve aFRR hausse, capacité (kW)", data:m.map(p => p.ru), borderColor:couleur("--hausse"), borderDash:[4,3], pointRadius:0, stepped:true, yAxisID:"y"},
+      {type:"line", label:"SoC planifié (%)", data:m.map(p => 100*p.soc/capaciteKwh), borderColor:couleur("--jaune"), borderWidth:2, pointRadius:0, yAxisID:"y2"},
+      ...(avecAct && m.every(p => p.soc_reel !== undefined) ? [{type:"line", label:"SoC réel avec activations estimées (%)", data:m.map(p => 100*p.soc_reel/capaciteKwh), borderColor:couleur("--rouge"), borderWidth:1.5, borderDash:[2,3], pointRadius:0, yAxisID:"y2"}] : [])]},
+    options:{responsive:true, plugins:{legend:{position:"bottom"}, title:{display:true, text:`Stratégie : ${stratLabel[strat]}` + (n > 1 ? ` · moyenne de ${series.length} jours` : ""), color:"#c9d1d9", font:{weight:"normal"}},
       tooltip:{callbacks:{
         label: ctx => {
-          const p = plan[ctx.dataIndex], v = Math.abs(ctx.parsed.y), l = ctx.dataset.label;
-          if(l.startsWith("Soutirage DA")) return v ? `Soutirage DA : ${fmt(v,0)} kW, acheté ${fmt(p.prix_da,1)} €/MWh + TURPE ${fmt(p.turpe,1)} €/MWh` : "Soutirage DA : 0";
-          if(l.startsWith("Injection DA")) return v ? `Injection DA : ${fmt(v,0)} kW, vendu ${fmt(p.prix_da,1)} €/MWh` + (p.turpe_inj ? ` moins TURPE injection ${fmt(p.turpe_inj,1)}` : "") : "Injection DA : 0";
+          const p = m[ctx.dataIndex], v = Math.abs(ctx.parsed.y), l = ctx.dataset.label;
+          if(l.startsWith("Soutirage DA")) return v ? `Soutirage DA : ${fmt(v,0)} kW, acheté ${fmt(p.prix,1)} €/MWh + TURPE ${fmt(p.turpe,1)} €/MWh` : "Soutirage DA : 0";
+          if(l.startsWith("Injection DA")) return v ? `Injection DA : ${fmt(v,0)} kW, vendu ${fmt(p.prix,1)} €/MWh` + (p.turpe_inj ? ` moins TURPE injection ${fmt(p.turpe_inj,1)}` : "") : "Injection DA : 0";
           if(l.startsWith("Soutirage par activation")) return v ? `Activation aFRR baisse : ${fmt(v,0)} kW absorbés, TURPE ${fmt(p.turpe,1)} €/MWh` : null;
           if(l.startsWith("Injection par activation")) return v ? `Activation aFRR hausse : ${fmt(v,0)} kW livrés` : null;
           if(l.startsWith("Réserve aFRR baisse")) return `Réserve aFRR baisse : ${fmt(v,0)} kW (capacité)`;
           if(l.startsWith("Réserve aFRR hausse")) return `Réserve aFRR hausse : ${fmt(v,0)} kW (capacité)`;
-          if(l.startsWith("SoC planifié")) return `SoC planifié : ${fmt(ctx.parsed.y,1)} % (${fmt(p.soc_kwh,0)} kWh)`;
+          if(l.startsWith("SoC planifié")) return `SoC planifié : ${fmt(ctx.parsed.y,1)} % (${fmt(p.soc,0)} kWh)`;
           if(l.startsWith("SoC réel")) return `SoC réel estimé : ${fmt(ctx.parsed.y,1)} %`;
           return l;
         },
-        footer: items => { const p = plan[items[0].dataIndex]; return `Résultat DA du pas : ${fmt(revenuPas(p),2)} €`; }
+        footer: items => { const p = m[items[0].dataIndex]; return `Résultat DA du pas : ${fmt((p.injection * p.prix - p.soutirage * (p.prix + p.turpe)) * 0.25 / 1000, 2)} €`; }
       }}},
       scales:{x:{...grille, stacked:true, ticks:{maxTicksLimit:12}},
               y:{...grille, stacked:true, title:{display:true,text:"kW, soutirage et réserve baisse en négatif"}},
@@ -427,123 +568,41 @@ function dessinerPlan(){
   });
 }
 document.querySelectorAll('input[name="strat"]').forEach(r => r.addEventListener("change", dessinerPlan));
-document.querySelectorAll(".fleche[data-nav]").forEach(b => b.addEventListener("click", () => {
-  const s = document.getElementById(b.dataset.nav);
-  const i = s.selectedIndex - Number(b.dataset.sens);      // options triées du plus récent au plus ancien
-  if(i < 0 || i >= s.options.length) return;
-  s.selectedIndex = i; s.dispatchEvent(new Event("change"));
-}));
-document.querySelectorAll('#ida-cases input[type="checkbox"]').forEach(cb => cb.addEventListener("change", () => {
-  if(!graphe) return;
-  graphe.data.datasets.forEach((d, i) => { if(d.serie === cb.dataset.serie) graphe.setDatasetVisibility(i, cb.checked); });
-  graphe.update();
-}));
 
-async function chargerResultats(jour){
-  const vide = document.getElementById("vide-plan");
-  if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
-  resultatsCourants = null;
-  for(const id of ["v-opt","v-da","v-afrr","v-real","t-da","t-real","x-opt","x-da","x-real","x-afrr"]) txt(id, "—");
-  for(const id of ["s-opt","s-da","s-afrr","s-real"]) txt(id, "€/MW/jour net TURPE");
-  for(const id of ["xs-opt","xs-real","xs-afrr"]) txt(id, "€/MW/jour total net");
-  try{
-    const r = await fetch(`data/resultats/${jour}.json`, {cache:"no-store"});
-    if(!r.ok){ vide.hidden=false; vide.textContent="Pas encore de calcul pour cette journée."; return; }
-    const brut = await r.json();
-    if(!brut.scenarios){ vide.hidden=false; vide.textContent="Résultats d'une ancienne version : ils seront recalculés au prochain passage du robot."; return; }
-    const cle = cleScenario(), sc = brut.scenarios[cle] || brut.scenarios.BT;
-    const res = {...sc, puissance_mw: brut.puissance_mw, afrr_disponible: brut.afrr_disponible};
-    resultatsCourants = res;
-    txt("note-tarif", decrireTarif(sc.tarif));
-    const met = (id, sid, o, detail) => {
-      if(!o || o.erreur){ txt(id, "—"); txt(sid, o && o.erreur ? "calcul impossible : " + o.erreur : "€/MW/jour"); return; }
-      txt(id, fmt(o.net_eur_par_mw, 0));
-      const tid = id.replace("v-", "t-"); if(document.getElementById(tid)) txt(tid, fmt(o.turpe_eur / res.puissance_mw, 0));
-      txt(sid, `€/MW/jour net TURPE · brut ${fmt(o.brut_eur_par_mw,0)} · ${detail(o)}`);
-    };
-    met("v-opt", "s-opt", res.optimum, o => `DA ${fmt(o.da_brut_eur/res.puissance_mw,0)}, aFRR ↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)}, TURPE ${fmt(o.turpe_eur/res.puissance_mw,0)}, ${fmt(o.cycles,2)} cycles`);
-    met("v-da", "s-da", res.da_seul, o => `TURPE ${fmt(o.turpe_eur/res.puissance_mw,0)} €/MW, ${fmt(o.cycles,2)} cycles`);
-    met("v-afrr", "s-afrr", res.afrr_seul, o => `↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)} €/MW`);
-    met("v-real", "s-real", res.realiste, o => `DA ${fmt(o.da_brut_eur/res.puissance_mw,0)}, aFRR ↓ ${fmt(o.afrr_baisse_eur/res.puissance_mw,0)}, ↑ ${fmt(o.afrr_hausse_eur/res.puissance_mw,0)}, ${o.regle ? o.regle.blocs_baisse_retenus + " h ↓ / " + o.regle.blocs_hausse_retenus + " h ↑ retenues" : ""}, ${fmt(o.cycles,2)} cycles`);
-    if(!res.afrr_disponible) txt("s-afrr", "prix aFRR capacité non collectés pour cette journée");
-    const xp = res.ex_post || {};
-    const metX = (id, sid, k) => {
-      const v = xp[k]; if(!v){ txt(sid, "en attente des activations complètes de la journée"); return; }
-      txt(id, fmt(v.total_net_eur_par_mw, 0));
-      txt(sid, `€/MW/jour ${v.partiel ? "provisoire, " + v.pas_couverts + "/96 pas publiés" : "total net"} · complément énergie ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)} (↑ ${fmt(v.energie_hausse_kwh,0)} kWh, ↓ ${fmt(v.energie_baisse_kwh,0)} kWh) · refusé par le prix pour tenir SoC et cycles : ↑ ${fmt(v.refusee_hausse_kwh,0)} kWh, ↓ ${fmt(v.refusee_baisse_kwh,0)} kWh · ${fmt(v.cycles_reels,2)} cycles · écart SoC fin de journée ${v.ecart_soc_fin_kwh >= 0 ? "+" : ""}${fmt(100*v.ecart_soc_fin_kwh/capaciteKwh,1)} pt${v.alertes.length ? " · " + v.alertes.join(" ; ") : ""}`);
-    };
-    metX("x-opt", "xs-opt", "optimum"); metX("x-real", "xs-real", "realiste"); metX("x-afrr", "xs-afrr", "afrr_seul");
-    if(xp.afrr_seul_100){ const v = xp.afrr_seul_100; document.getElementById("xs-afrr").textContent += ` · si nos offres en énergie sont retenues à 100 % : ${fmt(v.total_net_eur_par_mw,0)} €/MW (complément ${v.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(v.complement_net_eur_par_mw,0)}, ↑ ${fmt(v.energie_hausse_kwh,0)} kWh, ↓ ${fmt(v.energie_baisse_kwh,0)} kWh, refusé ↑ ${fmt(v.refusee_hausse_kwh,0)} ↓ ${fmt(v.refusee_baisse_kwh,0)} kWh, ${fmt(v.cycles_reels,2)} cycles)`; }
-    if(res.da_seul && !res.da_seul.erreur) txt("x-da", fmt(res.da_seul.net_eur_par_mw, 0));
-    dessinerPlan();
-  }catch(e){ vide.hidden=false; vide.textContent="Erreur résultats : " + e.message; }
-}
-
-async function chargerAfrr(jour){
-  const vide = document.getElementById("vide-afrr");
-  if(grapheAfrr){ grapheAfrr.destroy(); grapheAfrr = null; }
-  txt("k-afrr-up", "—"); txt("k-afrr-down", "—");
-  try{
-    const r = await fetch(`data/afrr_capacite/${jour}.json`, {cache:"no-store"});
-    if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée aFRR capacité pour cette journée."; return; }
-    const tous = await r.json();
-    const daily = tous.filter(p => String(p.horizon).toUpperCase()==="DAILY");
-    const pts = daily.length ? daily : tous;
-    const sens = [...new Set(pts.map(p => p.sens))], horizons = [...new Set(tous.map(p => p.horizon))];
-    const up = sens.find(s => /UP/i.test(s) && !/DOWN/i.test(s)), down = sens.find(s => /DOWN/i.test(s) && !/UP/i.test(s));
-    const pas = [...new Set(pts.map(p => p.debut))].sort((a, b) => new Date(a) - new Date(b));
-    const serie = s => pas.map(d => { const p = pts.find(q => q.debut===d && q.sens===s); return p ? Number(p.prix_eur_mw_15min ?? p.prix_eur_mw_h) : null; });   // anciens fichiers : la valeur brute est dans prix_eur_mw_15min
-    const datasets = [];
-    if(up)   datasets.push({label:"Hausse", data:serie(up),   borderColor:couleur("--hausse"), borderWidth:1.5, borderDash:[6,3], pointRadius:0, stepped:true});
-    if(down) datasets.push({label:"Baisse", data:serie(down), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true});
-    if(!pts.length || !datasets.length){
-      vide.hidden=false;
-      vide.textContent=`Fichier lu : ${tous.length} valeurs, sens trouvés : ${sens.join(", ")||"aucun"}, horizons : ${horizons.join(", ")||"aucun"}. Tracé impossible.`;
-      return;
-    }
-    vide.hidden=true;
-    grapheAfrr = new Chart(document.getElementById("g-afrr"), {type:"line", data:{labels: pas.map(heureParis), datasets},
-      options: opts("€/MW/h", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${c.parsed.y===null ? "—" : fmt(c.parsed.y,2)} €/MW/h`}}}})});
-    if(up)   txt("k-afrr-up",   fmt(moy(serie(up).filter(v => v!==null)), 1));
-    if(down) txt("k-afrr-down", fmt(moy(serie(down).filter(v => v!==null)), 1));
-  }catch(e){ vide.hidden=false; vide.textContent="Erreur aFRR : " + e.message; }
-}
-
+// ----- activations aFRR énergie (journalier)
+let grapheVol = null, graphePrixEn = null;
+const selEn = document.getElementById("jour-energie");
 async function chargerEnergie(jour){
   const vide = document.getElementById("vide-energie");
   for(const g of [grapheVol, graphePrixEn]) if(g) g.destroy();
   grapheVol = graphePrixEn = null;
   for(const id of ["e-mwh-up","e-mwh-down","e-pm-up","e-pm-down","e-taux-up","e-taux-down"]) txt(id, "—");
-  try{
-    const r = await fetch(`data/afrr_energie/${jour}.json`, {cache:"no-store"});
-    if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée d'activation pour cette journée."; return; }
-    const pts = (await r.json()).sort(parDate);
-    vide.hidden = true;
-    const labels = pts.map(p => heureParis(p.debut));
-    grapheVol = new Chart(document.getElementById("g-vol"), {
-      type:"bar",
-      data:{labels, datasets:[
-        {label:"Activé à la hausse (MW)", data:pts.map(p => Number(p.active_hausse_mw)), backgroundColor:couleur("--hausse")},
-        {label:"Activé à la baisse (MW)", data:pts.map(p => p.active_baisse_mw===null ? null : -Math.abs(Number(p.active_baisse_mw))), backgroundColor:couleur("--baisse")}]},
-      options: opts("MW, baisse en négatif", {scales:{x:{...grille, stacked:true, ticks:{maxTicksLimit:12}}, y:{...grille, stacked:true, title:{display:true,text:"MW, baisse en négatif"}}}})
-    });
-    graphePrixEn = new Chart(document.getElementById("g-prix-en"), {
-      type:"line",
-      data:{labels, datasets:[
-        {label:"Prix moyen pondéré hausse (€/MWh)", data:pts.map(p => Number(p.prix_hausse_eur_mwh)), borderColor:couleur("--hausse"), borderWidth:1.5, pointRadius:0, stepped:true},
-        {label:"Prix moyen pondéré baisse (€/MWh)", data:pts.map(p => Number(p.prix_baisse_eur_mwh)), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true}]},
-      options: opts("€/MWh")
-    });
-    const mwhUp = somme(pts, p => p.active_hausse_mw) / 4, mwhDown = somme(pts, p => Math.abs(p.active_baisse_mw)) / 4;
-    const pmUp = mwhUp ? somme(pts, p => Number(p.active_hausse_mw) * Number(p.prix_hausse_eur_mwh)) / 4 / mwhUp : null;
-    const pmDown = mwhDown ? somme(pts, p => Math.abs(Number(p.active_baisse_mw)) * Number(p.prix_baisse_eur_mwh)) / 4 / mwhDown : null;
-    const besoinUp = somme(pts, p => p.besoin_hausse_mw) / 4, besoinDown = somme(pts, p => Math.abs(p.besoin_baisse_mw)) / 4;
-    txt("e-mwh-up", fmt(mwhUp)); txt("e-mwh-down", fmt(mwhDown));
-    txt("e-pm-up", fmt(pmUp, 1)); txt("e-pm-down", fmt(pmDown, 1));
-    txt("e-taux-up", besoinUp ? fmt(100 * mwhUp / besoinUp, 1) + " %" : "—");
-    txt("e-taux-down", besoinDown ? fmt(100 * mwhDown / besoinDown, 1) + " %" : "—");
-  }catch(e){ vide.hidden=false; vide.textContent="Erreur activations : " + e.message; }
+  const r = await fetch(`data/afrr_energie/${jour}.json`, {cache:"no-store"});
+  if(!r.ok){ vide.hidden=false; vide.textContent="Aucune donnée d'activation pour cette journée."; return; }
+  const pts = (await r.json()).sort(parDate); vide.hidden = true;
+  const labels = pts.map(p => heureParis(p.debut));
+  grapheVol = new Chart(document.getElementById("g-vol"), {type:"bar",
+    data:{labels, datasets:[
+      {label:"Activé à la hausse (MW)", data:pts.map(p => Number(p.active_hausse_mw)), backgroundColor:couleur("--hausse")},
+      {label:"Activé à la baisse (MW)", data:pts.map(p => p.active_baisse_mw===null ? null : -Math.abs(Number(p.active_baisse_mw))), backgroundColor:couleur("--baisse")}]},
+    options: opts("MW, baisse en négatif", {scales:{x:{...grille, stacked:true, ticks:{maxTicksLimit:12}}, y:{...grille, stacked:true, title:{display:true,text:"MW, baisse en négatif"}}}})});
+  graphePrixEn = new Chart(document.getElementById("g-prix-en"), {type:"line",
+    data:{labels, datasets:[
+      {label:"Prix moyen pondéré hausse (€/MWh)", data:pts.map(p => Number(p.prix_hausse_eur_mwh)), borderColor:couleur("--hausse"), borderWidth:1.5, pointRadius:0, stepped:true},
+      {label:"Prix moyen pondéré baisse (€/MWh)", data:pts.map(p => Number(p.prix_baisse_eur_mwh)), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true}]},
+    options: opts("€/MWh")});
+  const mwhUp = somme(pts, p => p.active_hausse_mw) / 4, mwhDown = somme(pts, p => Math.abs(p.active_baisse_mw)) / 4;
+  const pmUp = mwhUp ? somme(pts, p => Number(p.active_hausse_mw) * Number(p.prix_hausse_eur_mwh)) / 4 / mwhUp : null;
+  const pmDown = mwhDown ? somme(pts, p => Math.abs(Number(p.active_baisse_mw)) * Number(p.prix_baisse_eur_mwh)) / 4 / mwhDown : null;
+  const besoinUp = somme(pts, p => p.besoin_hausse_mw) / 4, besoinDown = somme(pts, p => Math.abs(p.besoin_baisse_mw)) / 4;
+  txt("e-mwh-up", fmt(mwhUp)); txt("e-mwh-down", fmt(mwhDown)); txt("e-pm-up", fmt(pmUp, 1)); txt("e-pm-down", fmt(pmDown, 1));
+  txt("e-taux-up", besoinUp ? fmt(100 * mwhUp / besoinUp, 1) + " %" : "—"); txt("e-taux-down", besoinDown ? fmt(100 * mwhDown / besoinDown, 1) + " %" : "—");
 }
+document.querySelectorAll(".fleche[data-nav]").forEach(b => b.addEventListener("click", () => {
+  const s = document.getElementById(b.dataset.nav), i = s.selectedIndex - Number(b.dataset.sens);
+  if(i < 0 || i >= s.options.length) return; s.selectedIndex = i; s.dispatchEvent(new Event("change"));
+}));
+selEn.addEventListener("change", e => chargerEnergie(e.target.value));
 
 // ----- dépôt d'une enchère intraday depuis la page -----
 const DEPOT = {proprietaire:"ORIONchantier", depot:"bess-reference", branche:"main"};
@@ -569,7 +628,7 @@ document.getElementById("ida-verifier").addEventListener("click", () => {
   if(!creneaux.length || !lignes.length){ etat.textContent = `Rien de lisible : ${creneaux.length} créneaux, ${lignes.length} lignes de valeurs.`; return; }
   if(creneaux.length !== lignes.length){ etat.textContent = `${creneaux.length} créneaux pour ${lignes.length} lignes de valeurs : collage incomplet ou mélangé.`; return; }
   const prix = lignes.map(l => l[3]);
-  etat.textContent = `${ench} du ${sel.value} : ${creneaux.length} pas${creneaux.length === attendu ? "" : " (attendu " + attendu + ")"}, premier créneau ${String(creneaux[0][0]).padStart(2,"0")}:${String(creneaux[0][1]).padStart(2,"0")}, prix de ${fmt(Math.min(...prix),2)} à ${fmt(Math.max(...prix),2)} €/MWh. Prêt à envoyer.`;
+  etat.textContent = `${ench} du ${jourDepot()} : ${creneaux.length} pas${creneaux.length === attendu ? "" : " (attendu " + attendu + ")"}, premier créneau ${String(creneaux[0][0]).padStart(2,"0")}:${String(creneaux[0][1]).padStart(2,"0")}, prix de ${fmt(Math.min(...prix),2)} à ${fmt(Math.max(...prix),2)} €/MWh. Prêt à envoyer.`;
   envoyer.disabled = false;
 });
 document.getElementById("ida-envoyer").addEventListener("click", async () => {
@@ -577,7 +636,7 @@ document.getElementById("ida-envoyer").addEventListener("click", async () => {
   const jeton = jetonInput.value.trim();
   if(!jeton){ etat.textContent = "Il manque le jeton GitHub (voir le volet ci-dessous)."; document.querySelector(".jeton").open = true; return; }
   if(document.getElementById("ida-memoriser").checked){ try{ localStorage.setItem(CLE_JETON, jeton); }catch(e){} }
-  const ench = document.querySelector('input[name="ench"]:checked').value, jour = sel.value;
+  const ench = document.querySelector('input[name="ench"]:checked').value, jour = jourDepot();
   const chemin = `data/ida/${jour}-${ench}.txt`;
   const url = `https://api.github.com/repos/${DEPOT.proprietaire}/${DEPOT.depot}/contents/${chemin}`;
   const entetes = {Authorization: "Bearer " + jeton, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"};
@@ -632,90 +691,42 @@ document.getElementById("sites-fichier").addEventListener("change", async e => {
   if(ok) etat.textContent += " Le sélecteur de sites se mettra à jour après le passage du robot (Ctrl+F5).";
 });
 
-let grapheCumul = null;
-async function cumuler(){
-  const etat = document.getElementById("cumul-etat");
-  const du = document.getElementById("cumul-du").value, au = document.getElementById("cumul-au").value;
-  const jours = (window.joursResultats || []).filter(j => j >= du && j <= au);
-  if(!jours.length){ etat.textContent = "Aucun jour calculé dans cet intervalle."; return; }
-  etat.textContent = `Lecture de ${jours.length} jour(s)…`;
-  const cle = cleScenario();
-  const strats = ["da_seul", "afrr_seul", "realiste", "optimum"];
-  const totCap = {}, totEn = {}, parJour = {}, nbEn = {}, partiels = {};
-  for(const s of strats){ totCap[s] = 0; totEn[s] = 0; parJour[s] = []; nbEn[s] = 0; partiels[s] = 0; }
-  let lus = 0;
-  for(const j of jours){
-    try{
-      const r = await (await fetch(`data/resultats/${j}.json`, {cache:"no-store"})).json();
-      const sc = r.scenarios ? (r.scenarios[cle] || r.scenarios.BT) : null;
-      if(!sc) continue;
-      lus++;
-      for(const s of strats){
-        const o = sc[s], cap = o && !o.erreur ? o.net_eur_par_mw : 0;
-        const xp = sc.ex_post && sc.ex_post[s];
-        const en = xp ? xp.complement_net_eur_par_mw : 0;
-        totCap[s] += cap; totEn[s] += en; parJour[s].push(cap + en);
-        if(xp){ nbEn[s]++; if(xp.partiel) partiels[s]++; }
-      }
-    }catch(e){ for(const s of strats) parJour[s].push(null); }
-  }
-  etat.textContent = `${lus} jour(s) cumulés, du ${jours[0]} au ${jours[jours.length-1]}.`;
-  document.getElementById("cumul-tuiles").hidden = false;
-  const ids = {da_seul:"da", afrr_seul:"afrr", realiste:"real", optimum:"opt"};
-  for(const s of strats){
-    const tot = totCap[s] + totEn[s];
-    txt("c-" + ids[s], fmt(tot, 0));
-    txt("cs-" + ids[s], `€/MW sur ${lus} j, soit ${fmt(tot / Math.max(lus,1), 0)} €/MW/jour en moyenne · capacité et DA ${fmt(totCap[s],0)}, énergie ${totEn[s] >= 0 ? "+" : ""}${fmt(totEn[s],0)}` + (s === "da_seul" ? "" : ` (${nbEn[s]} j avec activations${partiels[s] ? ", " + partiels[s] + " provisoires" : ""})`));
-  }
-  document.getElementById("cumul-graphe-cadre").hidden = false;
-  if(grapheCumul) grapheCumul.destroy();
-  const couleurs = {da_seul: couleur("--cyan"), afrr_seul: couleur("--vert"), realiste: couleur("--orange"), optimum: "#c9d1d9"};
-  const noms = {da_seul:"DA seul", afrr_seul:"aFRR seul + énergie", realiste:"Réaliste + énergie", optimum:"Optimum + énergie"};
-  grapheCumul = new Chart(document.getElementById("g-cumul"), {
-    type:"bar",
-    data:{labels: jours, datasets: strats.map(s => ({label: noms[s], data: parJour[s], backgroundColor: couleurs[s]}))},
-    options: opts("€/MW/jour", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${fmt(c.parsed.y,0)} €/MW`}}}})
-  });
-}
-document.getElementById("cumul-calculer").addEventListener("click", cumuler);
 
-function remplir(select, jours){
-  for(const j of [...jours].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; select.appendChild(o); }
+
+function rafraichir(){
+  const j = joursSelection();
+  txt("sel-resume", !j.length ? "Aucun jour sélectionné" : j.length === 1 ? `Journée ${j[0]}` : `Du ${j[0]} au ${j[j.length-1]}, ${j.length} jours`);
+  txt("depot-jour", jourDepot() ? "pour le " + jourDepot() + (j.length > 1 ? " (dernier jour de la sélection)" : "") : "");
+  chargerDA(); chargerAfrr(); chargerResultats();
 }
 
 (async () => {
   try{
     const cfg = await (await fetch("config/parametres.json",{cache:"no-store"})).json();
-    const b = cfg.batterie, t = cfg.turpe, s = t.soutirage_eur_mwh;
-    capaciteKwh = b.capacite_kwh;
+    const b = cfg.batterie, t = cfg.turpe, s = t.soutirage_eur_mwh; capaciteKwh = b.capacite_kwh;
     txt("note-batterie", `Batterie de référence ${b.puissance_kw} kW / ${b.capacite_kwh} kWh, SoC ${b.soc_min*100}-${b.soc_max*100} %, rendement ${b.rendement_aller_retour*100} %, ${b.cycles_max_par_jour} cycles/jour`);
+    txt("note-turpe", `TURPE BT > 36 kVA, option ${t.option}, soutirage HPH ${s.HPH} / HCH ${s.HCH} / HPB ${s.HPB} / HCB ${s.HCB} €/MWh, injection ${t.injection_eur_mwh} €/MWh. Heures creuses ${t.heures_creuses}, saison haute novembre à mars. Composantes fixes exclues.`);
     const H = cfg.turpe_hta;
     if(H) document.getElementById("note-turpe").insertAdjacentHTML("afterend", `<div class="note">TURPE HTA (courte utilisation, parties variables) : standard 5 plages pointe fixe ; zone soutirage : injection payée ${-H.grilles_c_eur_kwh.zone_soutirage.injection.POINTE*10} €/MWh à la pointe ; zone injection : soutirage payé ${-H.grilles_c_eur_kwh.zone_injection.soutirage.POINTE_INJ*10} €/MWh à la pointe d'injection, injection ${H.grilles_c_eur_kwh.zone_injection.injection.POINTE_INJ*10} €/MWh. Hypothèses à confirmer : ${H.hypotheses_a_confirmer.join(" ; ")}.</div>`);
     const R = cfg.strategie_realiste;
-    if(R) txt("note-expost", `Règle de 9h : baisse ${R.baisse.plages.map(p=>p.join("-")).join(", ")} à ${R.baisse.part_puissance*100} % de la puissance, plancher ${R.baisse.prix_plancher_eur_mw_h} €/MW/h ; hausse ${R.hausse.plages.map(p=>p.join("-")).join(", ")} à ${R.hausse.part_puissance*100} %, plancher ${R.hausse.prix_plancher_eur_mw_h} €/MW/h. Énergie activée : part = taux national, prix moyens pondérés RTE, convention RM chap. 4 (à la baisse le fournisseur paie si le prix est positif).`);
-    txt("note-turpe", `TURPE de référence : BT > 36 kVA, option ${t.option}, soutirage HPH ${s.HPH} / HCH ${s.HCH} / HPB ${s.HPB} / HCB ${s.HCB} €/MWh, injection ${t.injection_eur_mwh} €/MWh. Heures creuses ${t.heures_creuses}, saison haute novembre à mars. Composantes fixes exclues. Hypothèses à confirmer : ${t.hypotheses_a_confirmer.join(", ")}.`);
+    if(R) txt("note-expost", `Règle de 9h : baisse ${R.baisse.plages.map(p=>p.join("-")).join(", ")} à ${R.baisse.part_puissance*100} % de la puissance, plancher ${R.baisse.prix_plancher_eur_mw_h} €/MW/h ; hausse ${R.hausse.plages.map(p=>p.join("-")).join(", ")} à ${R.hausse.part_puissance*100} %, plancher ${R.hausse.prix_plancher_eur_mw_h} €/MW/h.`);
   }catch(e){ txt("note-turpe", "config/parametres.json introuvable."); }
   try{
-    const idx = await (await fetch("data/index.json",{cache:"no-store"})).json();
+    idx = await (await fetch("data/index.json",{cache:"no-store"})).json();
     txt("maj", idx.mis_a_jour ? "dernière collecte " + idx.mis_a_jour.replace("T"," ") : "");
-    idaDispo = idx.ida || {};
-    scenariosDispo = idx.scenarios || [{cle:"BT", type:"BT"}];
+    joursDispo = idx.jours || []; idaDispo = idx.ida || {}; scenariosDispo = idx.scenarios || [{cle:"BT", type:"BT"}];
+    const ill = idx.ida_illisibles || {};
+    if(Object.keys(ill).length) document.getElementById("note-tarif").insertAdjacentHTML("afterend", '<div class="note" style="color:var(--rouge)">Fichiers intraday illisibles : ' + Object.entries(ill).map(([f, e]) => f + " (" + e + ")").join(" ; ") + '</div>');
     majSelecteurRacc();
-    const illisibles = idx.ida_illisibles || {};
-    if(Object.keys(illisibles).length) document.getElementById("note-turpe").insertAdjacentHTML("afterend", '<div class="note" style="color:var(--rouge)">Fichiers intraday illisibles : ' + Object.entries(illisibles).map(([f, e]) => f + " (" + e + ")").join(" ; ") + '</div>');
-    remplir(sel, idx.jours || []);
-    window.joursResultats = idx.resultats || [];
-    const cdu = document.getElementById("cumul-du"), cau = document.getElementById("cumul-au");
-    for(const j of window.joursResultats){ for(const s of [cdu, cau]){ const o = document.createElement("option"); o.value = j; o.textContent = j; s.appendChild(o); } }
-    if(window.joursResultats.length){ cdu.value = window.joursResultats[0]; cau.value = window.joursResultats[window.joursResultats.length-1]; }
-    if((idx.jours||[]).length){ sel.value = idx.jours[idx.jours.length-1]; chargerDA(sel.value); chargerAfrr(sel.value); chargerResultats(sel.value); }
-    else { const v=document.getElementById("vide-da"); v.hidden=false; v.textContent="Aucune collecte enregistrée : lance le workflow une première fois."; }
-    sel.addEventListener("change", e => { chargerDA(e.target.value); chargerAfrr(e.target.value); chargerResultats(e.target.value); });
+    try{ const s = JSON.parse(localStorage.getItem("bess-selection") || "null"); if(s && joursDispo.includes(s.du) && joursDispo.includes(s.au)) selection = s; }catch(e){}
+    if(!selection.du && joursDispo.length){ const d = joursDispo[joursDispo.length-1]; selection = {du:d, au:d}; }
+    const ref = selection.au ? new Date(selection.au + "T12:00:00") : new Date();
+    calMois = new Date(ref.getFullYear(), ref.getMonth(), 1);
+    dessinerCal(); rafraichir();
     const en = idx.afrr_energie || [];
-    remplir(selEn, en);
+    for(const j of [...en].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; selEn.appendChild(o); }
     if(en.length){ selEn.value = en[en.length-1]; chargerEnergie(selEn.value); }
     else { const v=document.getElementById("vide-energie"); v.hidden=false; v.textContent="Aucune journée d'activation collectée pour l'instant."; }
-    selEn.addEventListener("change", e => chargerEnergie(e.target.value));
   }catch(e){
     const v=document.getElementById("vide-da"); v.hidden=false; v.textContent="Le fichier data/index.json est introuvable.";
   }

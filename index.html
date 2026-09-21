@@ -103,7 +103,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.7</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.8</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -180,12 +180,14 @@
   </div>
 
   <div class="bloc" id="bloc-prix">
-    <div class="bloc-titre"><h2>Prix spot France : day-ahead et enchères intraday</h2>
+    <div class="bloc-titre"><h2>Prix spot France : day-ahead, enchères intraday, activations aFRR</h2>
       <span id="ida-cases">
         <label><input type="checkbox" data-serie="DA" checked> DA</label>
         <label><input type="checkbox" data-serie="IDA1" disabled> IDA1</label>
         <label><input type="checkbox" data-serie="IDA2" disabled> IDA2</label>
         <label><input type="checkbox" data-serie="IDA3" disabled> IDA3</label>
+        <label style="margin-left:10px" title="Prix moyen pondéré des activations aFRR à la hausse, €/MWh"><input type="checkbox" data-serie="AEUP" disabled> aFRR énergie ↑</label>
+        <label title="Prix moyen pondéré des activations aFRR à la baisse, €/MWh"><input type="checkbox" data-serie="AEDN" disabled> aFRR énergie ↓</label>
       </span>
       <span class="note" id="ida-note"></span>
       <span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
@@ -412,10 +414,15 @@ async function chargerDA(){
   if(graphe){ graphe.destroy(); graphe = null; }
   for(const id of ["k-da-min","k-da-max","k-da-spread"]) txt(id, "—");
   const unique = jours.length === 1, encheres = unique ? (idaDispo[jours[0]] || []) : [];
+  const seriesEn = [];
+  for(const j of jours){ const en = await lire(`data/afrr_energie/${j}.json`); if(en && en.length) seriesEn.push(en.map(p => ({cle: cleQuart(p.debut), up: p.prix_hausse_eur_mwh === null ? undefined : Number(p.prix_hausse_eur_mwh), dn: p.prix_baisse_eur_mwh === null ? undefined : Number(p.prix_baisse_eur_mwh)}))); }
   for(const cb of document.querySelectorAll('#ida-cases input[type="checkbox"]')){
-    const s = cb.dataset.serie; if(s !== "DA"){ cb.disabled = !encheres.includes(s); if(cb.disabled) cb.checked = false; }
+    const s = cb.dataset.serie;
+    if(s === "AEUP" || s === "AEDN"){ cb.disabled = !seriesEn.length; if(cb.disabled) cb.checked = false; }
+    else if(s !== "DA"){ cb.disabled = !encheres.includes(s); if(cb.disabled) cb.checked = false; }
   }
-  note.textContent = !unique ? "Enchères intraday : sélectionner un jour unique." : (encheres.length ? "Enchères déposées : " + encheres.join(", ") + "." : "Aucune enchère intraday déposée pour ce jour.");
+  note.textContent = (!unique ? "Enchères intraday : sélectionner un jour unique. " : (encheres.length ? "Enchères déposées : " + encheres.join(", ") + ". " : "Aucune enchère intraday déposée pour ce jour. "))
+    + (seriesEn.length ? "Activations aFRR : prix publiés par RTE, à la baisse le fournisseur paie si le prix est positif." : "Activations aFRR : pas encore publiées pour cette sélection.");
   const series = [], vols = [];
   for(const j of jours){ const pts = await lire(`data/da/${j}.json`); if(pts) series.push(pts.map(p => ({cle: cleQuart(p.debut), prix: Number(p.prix), volume: Number(p.volume_mw) || 0}))); }
   if(!series.length){ vide.hidden = false; vide.textContent = "Aucune donnée day-ahead pour la sélection."; return; }
@@ -428,6 +435,12 @@ async function chargerDA(){
     const parCle = new Map(ida.points.map(p => [cleQuart(p.debut), p]));
     const cb = document.querySelector(`#ida-cases input[data-serie="${e}"]`);
     datasets.push({label: e + (ida.complet ? "" : " (incomplet)"), serie: e, data: labels.map(l => parCle.has(l) ? parCle.get(l).prix : null), borderColor: couleursIda[e], borderWidth:1.2, borderDash:[3,3], pointRadius:0, stepped:true, hidden: !(cb && cb.checked), volumes: labels.map(l => parCle.has(l) ? parCle.get(l).volume_mwh : null)});
+  }
+  if(seriesEn.length){
+    const mEn = moyenneParQuart(seriesEn), parCle = new Map(mEn.map(p => [p.cle, p]));
+    const cbU = document.querySelector('#ida-cases input[data-serie="AEUP"]'), cbD = document.querySelector('#ida-cases input[data-serie="AEDN"]');
+    datasets.push({label:"aFRR énergie hausse, prix moyen pondéré", serie:"AEUP", data: labels.map(l => parCle.has(l) && parCle.get(l).up !== undefined ? parCle.get(l).up : null), borderColor:couleur("--hausse"), borderWidth:1.5, pointRadius:0, stepped:true, hidden: !cbU.checked});
+    datasets.push({label:"aFRR énergie baisse, prix moyen pondéré", serie:"AEDN", data: labels.map(l => parCle.has(l) && parCle.get(l).dn !== undefined ? parCle.get(l).dn : null), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true, hidden: !cbD.checked});
   }
   graphe = new Chart(document.getElementById("g-da"), {type:"line", data:{labels, datasets},
     options: opts("€/MWh", {plugins:{legend:{display:false}, tooltip:{callbacks:{label: c => c.parsed.y===null ? null : `${c.dataset.label} : ${fmt(c.parsed.y,2)} €/MWh` + (c.dataset.volumes && c.dataset.volumes[c.dataIndex] ? `, volume ${fmt(c.dataset.volumes[c.dataIndex],0)} ${c.datasetIndex===0 ? "MW" : "MWh"}` : "")}}}})});

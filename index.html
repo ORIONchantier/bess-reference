@@ -103,7 +103,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.9</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.10</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -179,21 +179,6 @@
     <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR hausse, moyenne</div><div class="val" id="k-afrr-up">—</div><div class="sub">€/MW/h</div></div>
   </div>
 
-  <div class="bloc" id="bloc-prix">
-    <div class="bloc-titre"><h2>Prix spot France : day-ahead, enchères intraday, activations aFRR</h2>
-      <span id="ida-cases">
-        <label><input type="checkbox" data-serie="DA" checked> DA</label>
-        <label><input type="checkbox" data-serie="IDA1" disabled> IDA1</label>
-        <label><input type="checkbox" data-serie="IDA2" disabled> IDA2</label>
-        <label><input type="checkbox" data-serie="IDA3" disabled> IDA3</label>
-        <label style="margin-left:10px" title="Prix moyen pondéré des activations aFRR à la hausse, €/MWh"><input type="checkbox" data-serie="AEUP" disabled> aFRR énergie ↑</label>
-        <label title="Prix moyen pondéré des activations aFRR à la baisse, €/MWh"><input type="checkbox" data-serie="AEDN" disabled> aFRR énergie ↓</label>
-      </span>
-      <span class="note" id="ida-note"></span>
-      <span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
-    <div class="graphe"><canvas id="g-da"></canvas></div><div class="vide" id="vide-da" hidden></div>
-  </div>
-
   <div class="bloc" id="bloc-depot">
     <div class="bloc-titre">
       <h2>Déposer une enchère intraday</h2><span class="sel-resume" id="depot-jour"></span>
@@ -227,6 +212,21 @@
       <label><input type="checkbox" id="ida-memoriser" checked> Mémoriser sur cet appareil</label>
       <button class="bouton" id="ida-oublier" type="button">Oublier le jeton</button>
     </details>
+  </div>
+
+  <div class="bloc" id="bloc-prix">
+    <div class="bloc-titre"><h2>Prix spot France : day-ahead, enchères intraday, activations aFRR</h2>
+      <span id="ida-cases">
+        <label><input type="checkbox" data-serie="DA" checked> DA</label>
+        <label><input type="checkbox" data-serie="IDA1" disabled> IDA1</label>
+        <label><input type="checkbox" data-serie="IDA2" disabled> IDA2</label>
+        <label><input type="checkbox" data-serie="IDA3" disabled> IDA3</label>
+        <label style="margin-left:10px" title="Prix moyen pondéré des activations aFRR à la hausse, €/MWh"><input type="checkbox" data-serie="AEUP" disabled> aFRR énergie ↑</label>
+        <label title="Prix moyen pondéré des activations aFRR à la baisse, €/MWh"><input type="checkbox" data-serie="AEDN" disabled> aFRR énergie ↓</label>
+      </span>
+      <span class="note" id="ida-note"></span>
+      <span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
+    <div class="graphe"><canvas id="g-da"></canvas></div><div class="vide" id="vide-da" hidden></div>
   </div>
 
   <div class="bloc" id="bloc-afrr">

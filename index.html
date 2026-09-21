@@ -113,7 +113,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.1</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.3</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -223,6 +223,8 @@
     <div class="tuile" style="--coul:var(--rose)"><div class="lib">Spread DA 2h</div><div class="val" id="k-da-spread">—</div><div class="sub">€/MWh, 2 h les plus chères moins 2 h les moins chères</div></div>
     <div class="tuile" style="--coul:var(--violet)"><div class="lib">aFRR baisse, moyenne</div><div class="val" id="k-afrr-down">—</div><div class="sub">€/MW/h</div></div>
     <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR hausse, moyenne</div><div class="val" id="k-afrr-up">—</div><div class="sub">€/MW/h</div></div>
+    <div class="tuile" style="--coul:var(--jaune)"><div class="lib">Cycles par jour</div><div class="val" id="k-cycles">—</div><div class="sub" id="ks-cycles">stratégie affichée dans le plan</div></div>
+    <div class="tuile" style="--coul:var(--jaune)"><div class="lib">SoC moyen</div><div class="val" id="k-soc">—</div><div class="sub" id="ks-soc">stratégie affichée dans le plan</div></div>
   </div>
 
   <div class="bloc" id="bloc-depot">
@@ -287,7 +289,7 @@
       <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
       <label><input type="radio" name="strat" value="realiste"> Réaliste</label>
       <label><input type="radio" name="strat" value="optimum" checked> Optimum</label>
-      <label id="lab-perso" hidden><input type="radio" name="strat" value="perso"> Ma stratégie</label>
+      <label id="lab-perso"><input type="radio" name="strat" value="perso"> Ma stratégie</label>
       <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (prix d'offre couvrant le coût de remplacement, plafonds SoC et cycles). En multi-jours : moyenne par quart d'heure.</span>
       <span class="unite">kW et SoC % · pas 15 min</span>
       <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
@@ -609,6 +611,13 @@ function dessinerPlan(){
   if(!series.length){ vide.hidden = false; vide.textContent = "Pas de plan disponible pour cette stratégie."; return; }
   vide.hidden = true;
   const m = moyenneParQuart(series), labels = m.map(p => p.cle), avecAct = xps.length > 0;
+  // indicateurs de la stratégie affichée : cycles par jour (réels si l'énergie est estimée) et SoC moyen
+  let cyclesJ = null;
+  if(strat === "perso" && persoResultat){ cyclesJ = moy(persoResultat.plans.map(pl => (pl.reduce((s,q) => s + q.injection, 0) * 0.25 + pl.reduce((s,q) => s + q.act_up, 0) * 0.25) / Math.sqrt(window.cfgBatterie.rendement_aller_retour) / ((window.cfgBatterie.soc_max - window.cfgBatterie.soc_min) * capaciteKwh))); }
+  else cyclesJ = moy(lus.map(l => { const o = l.sc[strat], xp = l.sc.ex_post && l.sc.ex_post[strat]; return xp ? xp.cycles_reels : (o && !o.erreur ? o.cycles : null); }).filter(v => v !== null));
+  const socMoyPlan = moy(m.map(p => p.soc)), socMoyReel = avecAct && m.every(p => p.soc_reel !== undefined && p.soc_reel !== null) ? moy(m.map(p => p.soc_reel)) : null;
+  txt("k-cycles", fmt(cyclesJ, 2)); txt("ks-cycles", `${stratLabel[strat]}${n > 1 ? ", moyenne sur " + series.length + " jours" : ""}${avecAct && strat !== "perso" ? ", activations comprises" : ""}`);
+  txt("k-soc", fmt(100 * (socMoyReel ?? socMoyPlan) / capaciteKwh, 0) + " %"); txt("ks-soc", `${stratLabel[strat]}${socMoyReel !== null ? ", avec activations estimées (planifié " + fmt(100*socMoyPlan/capaciteKwh,0) + " %)" : ", planifié"}`);
   graphePlan = new Chart(document.getElementById("g-plan"), {
     data:{labels, datasets:[
       {type:"bar", label:"Soutirage DA, achat sur le marché (kW)", data:m.map(p => -p.soutirage), backgroundColor:"rgba(239,68,68,.7)", yAxisID:"y", stack:"p"},
@@ -853,7 +862,6 @@ async function calculerPerso(){
   txt("p-v-ecart", (tot - opt >= 0 ? "+" : "") + fmt(tot - opt, 0)); txt("p-s-ecart", `€/MW par rapport à l'optimum à information parfaite (${fmt(opt,0)}) sur la même sélection`);
   txt("p-v-ecart-da", (tot - daS >= 0 ? "+" : "") + fmt(tot - daS, 0)); txt("p-s-ecart-da", `€/MW par rapport au DA seul (${fmt(daS,0)}) sur la même sélection`);
   etat.textContent = `Calculé sur ${nbJ} jour(s), raccordement ${cle}.`;
-  document.getElementById("lab-perso").hidden = false;
   if(grapheParJour && parJour.length > 1){
     const i = grapheParJour.data.datasets.findIndex(d => d.label === "Ma stratégie");
     const ds = {label:"Ma stratégie", data: parJour.map(p => p.net), backgroundColor: couleur("--rose")};
@@ -867,8 +875,7 @@ document.getElementById("p-calculer").addEventListener("click", calculerPerso);
 function rafraichir(){
   const j = joursSelection();
   txt("sel-resume", !j.length ? "Aucun jour sélectionné" : j.length === 1 ? `Journée ${fmtJour(j[0])}` : `Du ${fmtJour(j[0])} au ${fmtJour(j[j.length-1])}, ${j.length} jours`);
-  persoResultat = null; document.getElementById("p-tuiles").hidden = true; document.getElementById("lab-perso").hidden = true;
-  if(document.querySelector('input[name="strat"]:checked').value === "perso") document.querySelector('input[name="strat"][value="optimum"]').checked = true;
+  persoResultat = null; document.getElementById("p-tuiles").hidden = true;
   txt("depot-jour", jourDepot() ? "pour le " + fmtJour(jourDepot()) + (j.length > 1 ? " (dernier jour de la sélection)" : "") : "");
   chargerDA(); chargerAfrr(); chargerResultats();
 }

@@ -1,0 +1,46 @@
+name: Rattrapage historique
+
+on:
+  workflow_dispatch:
+    inputs:
+      du:
+        description: "Premier jour (AAAA-MM-JJ)"
+        required: true
+      au:
+        description: "Dernier jour (AAAA-MM-JJ)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collecte
+  cancel-in-progress: false
+
+jobs:
+  historique:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests numpy scipy
+      - name: Récupération des données historiques
+        env:
+          RTE_KEY_B64: ${{ secrets.RTE_KEY_B64 }}
+          ENTSOE_TOKEN: ${{ secrets.ENTSOE_TOKEN }}
+        run: python scripts/historique.py "${{ github.event.inputs.du }}" "${{ github.event.inputs.au }}"
+      - name: Calcul des revenus sur les jours ajoutés
+        run: python scripts/calcul_revenu.py
+        continue-on-error: true
+      - name: Enregistrement des données dans le dépôt
+        run: |
+          git config user.name "robot-collecte"
+          git config user.email "robot@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "Historique ${{ github.event.inputs.du }} -> ${{ github.event.inputs.au }}"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && break
+            echo "push refusé, nouvelle tentative $i" ; sleep 10
+          done

@@ -27,7 +27,7 @@ CYCLES = B["cycles_max_par_jour"]
 K = B.get("facteur_marge_afrr_k", 1.0)
 BLOC = CFG.get("afrr", {}).get("bloc_reservation_min", 60)
 DT = 0.25                                                               # h par pas
-VERSION = 7                                                             # incrémenter force le recalcul des jours anciens
+VERSION = 8                                                             # incrémenter force le recalcul des jours anciens
 
 
 def instant(iso: str) -> int:
@@ -236,12 +236,12 @@ def ex_post(jour: str, res: dict):
                 if plein:
                     taux_up = 1.0 if (e.get("active_hausse_mw") or 0) > 0 else 0.0
                     taux_dn = 1.0 if abs(e.get("active_baisse_mw") or 0) > 0 else 0.0
+                pu, pd = e.get("prix_hausse_eur_mwh") or 0.0, e.get("prix_baisse_eur_mwh") or 0.0
                 # règle d'offre en énergie indexée sur le spot du quart d'heure :
                 # hausse activée seulement si le prix d'activation >= prix DA ; baisse seulement si prix d'activation <= prix DA
                 spot = pt["prix_da"]
                 if e.get("prix_hausse_eur_mwh") is None or pu < spot: taux_up = 0.0
                 if e.get("prix_baisse_eur_mwh") is None or pd > spot: taux_dn = 0.0
-                pu, pd = e.get("prix_hausse_eur_mwh") or 0.0, e.get("prix_baisse_eur_mwh") or 0.0
             d_up = pt["reserve_hausse_kw"] * taux_up * DT              # kWh demandés à la hausse (côté réseau)
             d_dn = pt["reserve_baisse_kw"] * taux_dn * DT              # kWh demandés à la baisse
             # plafonds : SoC tenable sur le reste de la journée, et budget de cycles
@@ -324,7 +324,11 @@ def main():
             deja = sc.get("ex_post") or {}
             if deja and not any(v.get("partiel") for v in deja.values()):
                 continue                                   # définitif, rien à refaire
-            xp = ex_post(cible.stem, sc)
+            try:
+                xp = ex_post(cible.stem, sc)
+            except Exception as err:
+                print(f"{cible.stem} {cle} : estimation énergie impossible, {type(err).__name__}: {err}")
+                continue
             if xp:
                 sc["ex_post"] = xp; modifie = True
                 o = xp.get("optimum", {})

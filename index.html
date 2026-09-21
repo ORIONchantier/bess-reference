@@ -103,7 +103,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.8</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.9</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -518,7 +518,7 @@ async function chargerResultats(){
       : `€/MW net TURPE${parJ(tot[s])} · TURPE ${fmt(turpe[s],0)} €/MW, ${fmt(cyc[s]/n,2)} cycles/j`;
     if(unique && o0 && o0.erreur) det = "calcul impossible : " + o0.erreur;
     txt("s-" + IDS[s], det);
-    txt("x-" + IDS[s], fmt(tot[s] + totX[s], 0));
+    txt("x-" + IDS[s], s === "da_seul" || nbX[s] > 0 ? fmt(tot[s] + totX[s], 0) : "—");
     if(s !== "da_seul"){
       const x0 = unique ? lus[0].sc.ex_post && lus[0].sc.ex_post[s] : null;
       txt("xs-" + IDS[s], x0 ? `€/MW ${x0.partiel ? "provisoire, " + x0.pas_couverts + "/96 pas publiés" : "total net"} · énergie ${x0.complement_net_eur_par_mw >= 0 ? "+" : ""}${fmt(x0.complement_net_eur_par_mw,0)} (↑ ${fmt(x0.energie_hausse_kwh,0)} kWh, ↓ ${fmt(x0.energie_baisse_kwh,0)} kWh) · refusé pour tenir SoC et cycles : ↑ ${fmt(x0.refusee_hausse_kwh,0)} ↓ ${fmt(x0.refusee_baisse_kwh,0)} kWh · ${fmt(x0.cycles_reels,2)} cycles · écart SoC fin ${x0.ecart_soc_fin_kwh >= 0 ? "+" : ""}${fmt(100*x0.ecart_soc_fin_kwh/capaciteKwh,1)} pt`

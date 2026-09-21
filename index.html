@@ -90,8 +90,10 @@
     <label>Raccordement</label>
     <button type="button" class="racc-btn" data-racc="BT">BT</button><button type="button" class="racc-btn" data-racc="HTA">HTA</button>
     <select id="site-hta" hidden></select>
+    <button type="button" class="bouton" id="sites-importer" hidden title="Remplace data/reference/sites.csv par votre fichier">Importer mes sites</button>
+    <input type="file" id="sites-fichier" accept=".csv,text/csv" hidden>
   </span>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.1</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.2</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -103,8 +105,11 @@
       <span class="jour-nav"><button class="fleche" type="button" data-nav="jour" data-sens="-1" title="Jour précédent">‹</button><select id="jour"></select><button class="fleche" type="button" data-nav="jour" data-sens="1" title="Jour suivant">›</button></span>
       <span class="note" id="note-batterie">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</span>
     </div>
-    <div class="note" id="note-turpe"></div>
     <div class="note" id="note-tarif" style="color:var(--jaune)"></div>
+    <details class="methode" style="margin-top:6px">
+      <summary>Paramètres TURPE et hypothèses</summary>
+      <div class="note" id="note-turpe" style="margin-top:8px"></div>
+    </details>
     <details class="methode" style="margin-top:10px">
       <summary>Méthode : ce que mesure chaque chiffre</summary>
       <dl>
@@ -325,6 +330,7 @@ function majSelecteurRacc(){
   const htas = scenariosDispo.filter(sc => sc.type === "HTA");
   for(const sc of htas){ const o = document.createElement("option"); o.value = sc.cle; o.textContent = sc.site ? sc.site : "HTA générique, poste non contraint"; s.appendChild(o); }
   s.hidden = raccordement !== "HTA" || !htas.length;
+  document.getElementById("sites-importer").hidden = raccordement !== "HTA";
   const cle = cleScenario(); if(htas.find(sc => sc.cle === cle)) s.value = cle;
 }
 document.querySelectorAll(".racc-btn").forEach(b => b.addEventListener("click", () => {
@@ -554,15 +560,11 @@ document.getElementById("ida-envoyer").addEventListener("click", async () => {
   }catch(e){ etat.textContent = "Erreur réseau : " + e.message; envoyer.disabled = false; }
 });
 
-document.getElementById("fref-envoyer").addEventListener("click", async () => {
-  const etat = document.getElementById("fref-etat"), inp = document.getElementById("fref-fichier");
+async function envoyerFichierReference(nom, texte, etat){
   const jeton = jetonInput.value.trim();
-  if(!jeton){ etat.textContent = "Il manque le jeton GitHub (volet ci-dessous)."; return; }
-  if(!inp.files.length){ etat.textContent = "Choisis un fichier."; return; }
-  const nom = document.querySelector('input[name="fref"]:checked').value;
-  const texte = await inp.files[0].text();
+  if(!jeton){ etat.textContent = "Il manque le jeton GitHub (bloc de dépôt, volet Jeton)."; document.querySelector(".jeton:last-of-type").open = true; return false; }
   const lignes = texte.split(/\r?\n/).filter(l => l.trim());
-  if(!lignes.length || !lignes[0].includes(";")){ etat.textContent = "Le fichier doit être un CSV séparé par des points-virgules, avec une ligne d'en-tête."; return; }
+  if(!lignes.length || !lignes[0].includes(";")){ etat.textContent = "Le fichier doit être un CSV séparé par des points-virgules, avec une ligne d'en-tête."; return false; }
   const chemin = `data/reference/${nom}`;
   const url = `https://api.github.com/repos/${DEPOT.proprietaire}/${DEPOT.depot}/contents/${chemin}`;
   const entetes = {Authorization: "Bearer " + jeton, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"};
@@ -574,9 +576,23 @@ document.getElementById("fref-envoyer").addEventListener("click", async () => {
     const corps = {message: `${nom} déposé depuis la page (${lignes.length - 1} lignes)`, content: btoa(unescape(encodeURIComponent(texte))), branch: DEPOT.branche};
     if(sha) corps.sha = sha;
     const r = await fetch(url, {method:"PUT", headers: {...entetes, "Content-Type":"application/json"}, body: JSON.stringify(corps)});
-    if(!r.ok){ const err = await r.json().catch(() => ({})); etat.textContent = "Échec GitHub " + r.status + " : " + (err.message || ""); return; }
+    if(!r.ok){ const err = await r.json().catch(() => ({})); etat.textContent = "Échec GitHub " + r.status + " : " + (err.message || ""); return false; }
     etat.textContent = `${nom} ${sha ? "remplacé" : "déposé"} (${lignes.length - 1} lignes). Recalcul lancé, résultats dans quelques minutes.`;
-  }catch(e){ etat.textContent = "Erreur réseau : " + e.message; }
+    return true;
+  }catch(e){ etat.textContent = "Erreur réseau : " + e.message; return false; }
+}
+document.getElementById("fref-envoyer").addEventListener("click", async () => {
+  const inp = document.getElementById("fref-fichier");
+  if(!inp.files.length){ document.getElementById("fref-etat").textContent = "Choisis un fichier."; return; }
+  envoyerFichierReference(document.querySelector('input[name="fref"]:checked').value, await inp.files[0].text(), document.getElementById("fref-etat"));
+});
+document.getElementById("sites-importer").addEventListener("click", () => document.getElementById("sites-fichier").click());
+document.getElementById("sites-fichier").addEventListener("change", async e => {
+  if(!e.target.files.length) return;
+  const etat = document.getElementById("note-tarif");
+  const ok = await envoyerFichierReference("sites.csv", await e.target.files[0].text(), etat);
+  e.target.value = "";
+  if(ok) etat.textContent += " Le sélecteur de sites se mettra à jour après le passage du robot (Ctrl+F5).";
 });
 
 function remplir(select, jours){

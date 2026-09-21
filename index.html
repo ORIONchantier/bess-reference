@@ -85,6 +85,7 @@
   footer{color:var(--sourd);font-size:11px;margin-top:24px;line-height:1.6}
   @media (max-width:700px){main,header{padding-left:12px;padding-right:12px}}
 
+  .cal[hidden],.note[hidden]{display:none!important}
   .cal{display:inline-block;background:#0f1522;border:1px solid var(--bord);border-radius:6px;padding:8px 10px;user-select:none}
   .cal-tete{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em}
   .cal-grille{display:grid;grid-template-columns:repeat(7,30px);gap:2px}
@@ -102,7 +103,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.6</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.7</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -110,13 +111,12 @@
   <div class="bloc commande" id="bloc-commande">
     <div class="bloc-titre" style="margin-bottom:0;align-items:flex-start">
       <h2>Sélection</h2>
-      <button type="button" class="bouton" id="cal-basculer">📅 <span id="cal-bouton-texte">Choisir les jours</span></button>
+      <button type="button" class="bouton" id="cal-basculer" title="Ouvrir le calendrier">📅 <span id="sel-resume">—</span></button>
       <div class="cal" id="cal" hidden>
         <div class="cal-tete"><button class="fleche" type="button" id="cal-prec">‹</button><span id="cal-mois"></span><button class="fleche" type="button" id="cal-suiv">›</button></div>
         <div class="cal-grille" id="cal-grille"></div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <span class="sel-resume" id="sel-resume">—</span>
         <span class="note" id="cal-aide" hidden>Un clic sélectionne un jour, un second clic sur un autre jour sélectionne l'intervalle. Les jours cadrés sont ceux collectés.</span>
         <span class="racc" style="margin-left:0" title="Type de raccordement de la batterie étudiée">
           <label>Raccordement</label>
@@ -369,13 +369,13 @@ function cliquerJour(iso){
   else selection = {du: iso < selection.du ? iso : selection.du, au: iso > selection.du ? iso : selection.du};
   try{ localStorage.setItem("bess-selection", JSON.stringify(selection)); }catch(e){}
   dessinerCal(); rafraichir();
-  if(selection.du !== selection.au){ document.getElementById("cal").hidden = true; document.getElementById("cal-aide").hidden = true; txt("cal-bouton-texte", "Choisir les jours"); }
+  if(calTimer) clearTimeout(calTimer);
+  if(selection.du !== selection.au) ouvrirCal(false);                       // intervalle fixé : repli immédiat
+  else calTimer = setTimeout(() => ouvrirCal(false), 2000);                 // jour unique : repli après 2 s sauf second clic
 }
-document.getElementById("cal-basculer").addEventListener("click", () => {
-  const c = document.getElementById("cal"), ouvert = c.hidden;
-  c.hidden = !ouvert; document.getElementById("cal-aide").hidden = !ouvert;
-  txt("cal-bouton-texte", ouvert ? "Fermer le calendrier" : "Choisir les jours");
-});
+let calTimer = null;
+function ouvrirCal(o){ document.getElementById("cal").hidden = !o; document.getElementById("cal-aide").hidden = !o; if(!o && calTimer){ clearTimeout(calTimer); calTimer = null; } }
+document.getElementById("cal-basculer").addEventListener("click", () => ouvrirCal(document.getElementById("cal").hidden));
 document.getElementById("cal-prec").addEventListener("click", () => { calMois = new Date(calMois.getFullYear(), calMois.getMonth() - 1, 1); dessinerCal(); });
 document.getElementById("cal-suiv").addEventListener("click", () => { calMois = new Date(calMois.getFullYear(), calMois.getMonth() + 1, 1); dessinerCal(); });
 

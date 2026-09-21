@@ -113,7 +113,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.3</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.4</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -421,10 +421,7 @@ function cliquerJour(iso){
   else if(iso === selection.du) selection = {du: iso, au: iso};
   else selection = {du: iso < selection.du ? iso : selection.du, au: iso > selection.du ? iso : selection.du};
   try{ localStorage.setItem("bess-selection", JSON.stringify(selection)); }catch(e){}
-  dessinerCal(); rafraichir();
-  if(calTimer) clearTimeout(calTimer);
-  if(selection.du !== selection.au) ouvrirCal(false);                       // intervalle fixé : repli immédiat
-  else calTimer = setTimeout(() => ouvrirCal(false), 2000);                 // jour unique : repli après 2 s sauf second clic
+  dessinerCal(); rafraichir();   // le calendrier reste ouvert ; il se replie par le bouton bleu
 }
 let calTimer = null;
 function ouvrirCal(o){ document.getElementById("cal").hidden = !o; document.getElementById("cal-aide").hidden = !o; if(!o && calTimer){ clearTimeout(calTimer); calTimer = null; } }
@@ -799,6 +796,7 @@ async function calculerPerso(){
   const cle = cleScenario();
   let soc = Math.min(SMAX, Math.max(SMIN, Number(prm["p-soc0"]) / 100 * E));
   let totDa = 0, totTurpe = 0, totCap = 0, totEn = 0, totCycles = 0, nbJ = 0, refUp = 0, refDn = 0, parJour = [], planMoy = [], joursAvecEn = 0;
+  let manqueDecharge = 0, manqueCharge = 0, pasDechargeVides = 0, pasDechargeTotal = 0;
   const plansParJour = [];
   for(const j of jours){
     const da = await lire(`data/da/${j}.json`), capF = await lire(`data/afrr_capacite/${j}.json`), enF = await lire(`data/afrr_energie/${j}.json`), res = await lire(`data/resultats/${j}.json`);
@@ -826,8 +824,8 @@ async function calculerPerso(){
       const c = capParCle.get(k) || {};
       const margeMin = SMIN + K * ru[t], margeMax = SMAX - K * rd[t];
       let ch = 0, dc = 0;
-      if(dansPlages(hm, chP) && prix <= chPrix){ ch = Math.min(P - rd[t], Math.max(0, (margeMax - soc) / ETA / DT)); }
-      else if(dansPlages(hm, dcP) && prix >= dcPrix){ dc = Math.min(P - ru[t], Math.max(0, (soc - margeMin) * ETA / DT), Math.max(0, budget * ETA / DT)); }
+      if(dansPlages(hm, chP) && prix <= chPrix){ const voulu = P - rd[t]; ch = Math.min(voulu, Math.max(0, (margeMax - soc) / ETA / DT)); manqueCharge += (voulu - ch) * DT; }
+      else if(dansPlages(hm, dcP) && prix >= dcPrix){ const voulu = P - ru[t]; dc = Math.min(voulu, Math.max(0, (soc - margeMin) * ETA / DT), Math.max(0, budget * ETA / DT)); pasDechargeTotal++; if(voulu > 0 && dc < voulu - 1e-6){ manqueDecharge += (voulu - dc) * DT; if(dc < 1e-6) pasDechargeVides++; } }
       soc += ch * ETA * DT - dc / ETA * DT; budget -= dc / ETA * DT;
       dayDa += (dc * prix - ch * prix) * DT / 1000; dayTurpe += (ch * tu.s + dc * tu.i) * DT / 1000;
       dayCap += (ru[t] * (c.up || 0) + rd[t] * (c.down || 0)) * DT / 1000;
@@ -855,13 +853,15 @@ async function calculerPerso(){
   const mw = P / 1000, capDa = (totDa - totTurpe + totCap) / mw, tot = capDa + (totEn + valSoc) / mw;
   persoResultat = {plans: plansParJour, parJour, tot};
   document.getElementById("p-tuiles").hidden = false;
-  txt("p-v-cap", fmt(capDa, 0)); txt("p-s-cap", `€/MW sur ${nbJ} j (${fmt(capDa/nbJ,0)}/j) · DA ${fmt(totDa/mw,0)}, TURPE ${fmt(totTurpe/mw,0)}, capacité aFRR ${fmt(totCap/mw,0)} · ${fmt(totCycles/nbJ,2)} cycles/j`);
+  txt("p-v-cap", fmt(capDa, 0)); txt("p-s-cap", `€/MW sur ${nbJ} j (${fmt(capDa/nbJ,0)}/j) · DA ${fmt(totDa/mw,0)}, TURPE ${fmt(totTurpe/mw,0)}, capacité aFRR ${fmt(totCap/mw,0)} · ${fmt(totCycles/nbJ,2)} cycles/j · décharge voulue mais impossible faute d'énergie : ${fmt(manqueDecharge,0)} kWh (${pasDechargeVides} quarts d'heure à vide sur ${pasDechargeTotal}) · charge voulue mais batterie pleine : ${fmt(manqueCharge,0)} kWh`);
   txt("p-v-tot", fmt(tot, 0)); txt("p-s-tot", `€/MW sur ${nbJ} j (${fmt(tot/nbJ,0)}/j) · énergie ${totEn >= 0 ? "+" : ""}${fmt(totEn/mw,0)} sur ${joursAvecEn} j avec activations · refusé pour tenir SoC et cycles ↑ ${fmt(refUp,0)} ↓ ${fmt(refDn,0)} kWh · SoC final ${fmt(100*soc/E,0)} % valorisé ${valSoc >= 0 ? "+" : ""}${fmt(valSoc/mw,0)} €/MW au DA moyen ${fmt(prixMoy,0)}`);
   const ref = resultatsCourants.lus, sumRef = s => ref.reduce((a, l) => { const o = l.sc[s], xp = l.sc.ex_post && l.sc.ex_post[s]; return a + (o && !o.erreur ? o.net_eur_par_mw : 0) + (xp ? xp.complement_net_eur_par_mw : 0); }, 0);
   const opt = sumRef("optimum"), daS = sumRef("da_seul");
   txt("p-v-ecart", (tot - opt >= 0 ? "+" : "") + fmt(tot - opt, 0)); txt("p-s-ecart", `€/MW par rapport à l'optimum à information parfaite (${fmt(opt,0)}) sur la même sélection`);
   txt("p-v-ecart-da", (tot - daS >= 0 ? "+" : "") + fmt(tot - daS, 0)); txt("p-s-ecart-da", `€/MW par rapport au DA seul (${fmt(daS,0)}) sur la même sélection`);
-  etat.textContent = `Calculé sur ${nbJ} jour(s), raccordement ${cle}.`;
+  const alerte = pasDechargeTotal && pasDechargeVides / pasDechargeTotal > 0.25 ? ` ATTENTION : ${pasDechargeVides} des ${pasDechargeTotal} quarts d'heure de décharge prévus sont restés à vide, la batterie n'avait pas l'énergie. Le prix plafond d'achat (${chPrix} €/MWh) ou les plages de charge ne suffisent pas à l'approvisionner : on n'injecte que ce qu'on a chargé.` : "";
+  etat.textContent = `Calculé sur ${nbJ} jour(s), raccordement ${cle}.` + alerte;
+  etat.style.color = alerte ? "var(--rouge)" : "";
   if(grapheParJour && parJour.length > 1){
     const i = grapheParJour.data.datasets.findIndex(d => d.label === "Ma stratégie");
     const ds = {label:"Ma stratégie", data: parJour.map(p => p.net), backgroundColor: couleur("--rose")};

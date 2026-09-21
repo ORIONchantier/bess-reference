@@ -55,6 +55,10 @@ jobs:
             python scripts/calcul_revenu.py
           fi
         continue-on-error: true
+      - name: Agent, règle adaptative (évaluation des derniers jours et décision pour J+1)
+        run: python scripts/regle_adaptative.py
+        continue-on-error: true
+        timeout-minutes: 20
       - name: Enregistrement des données dans le dépôt
         run: |
           git config user.name "robot-collecte"

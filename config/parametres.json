@@ -171,6 +171,20 @@
       "sites": "data/reference/sites.csv"
     }
   },
+  "agent": {
+    "description": "Approche 1, règle adaptative : pour J+1, choisit avant l'heure limite de J-1 la règle de la grille qui maximise moyenne - lambda x écart-type du revenu total (capacité + DA + énergie, net TURPE) sur les N derniers jours livrés jusqu'à J-1 exclu (D-2). Même séquence que la stratégie réaliste.",
+    "fenetre_jours": 30,
+    "fenetre_min_jours": 10,
+    "lambda_ecart_type": 0.5,
+    "scenario": "BT",
+    "evaluations_max_par_passage": 5,
+    "grille": {
+      "baisse_plages": [[], [["10:00", "17:00"]], [["11:00", "16:00"]], [["09:00", "18:00"]], [["00:00", "06:00"]], [["00:00", "06:00"], ["10:00", "17:00"]]],
+      "hausse_plages": [[], [["18:00", "22:00"]], [["17:00", "23:00"]], [["06:00", "09:00"], ["18:00", "22:00"]], [["07:00", "10:00"]]],
+      "parts": [0.25, 0.5, 0.75, 1.0],
+      "planchers": [2, 5, 10, 20]
+    }
+  },
   "decision": {
     "heure_limite_j_moins_1": "08:45",
     "note": "Heure à laquelle l'agent doit avoir décidé, pour un dépôt aFRR capacité avant 9h en J-1. Clôture de 9h donnée par l'utilisateur, article des Règles de marché RTE à citer. Toute donnée publiée après cette heure est interdite en entrée de l'agent."
@@ -196,9 +210,25 @@
         "chemin": "generation_forecast/v3/forecasts",
         "parametres": {
           "production_type": "SOLAR,WIND_ONSHORE,WIND_OFFSHORE",
-          "type": "D-2,D-1"
+          "type": "D-1"
         },
         "source": "guide Generation Forecast v03.01.01 §4.1.1 : v3, filières WIND_ONSHORE / WIND_OFFSHORE / SOLAR, valeurs multiples séparées par une virgule, 21 jours maximum par appel, pas 15 min, updated_date par valeur"
+      },
+      "production_courante": {
+        "chemin": "generation_forecast/v3/forecasts",
+        "parametres": {
+          "production_type": "SOLAR,WIND_ONSHORE,WIND_OFFSHORE",
+          "type": "CURRENT"
+        },
+        "source": "guide §2.3.1 et §4.1.1.1 : échéance « courante », mise à jour vers 9h30 et 19h30 et avec J-1 / IJ. Horizon couvert (J+1 ou non) non précisé par le guide : à constater"
+      },
+      "oa_j2": {
+        "chemin": "generation_forecast/v3/forecasts",
+        "parametres": {
+          "production_type": "AGGREGATED_CPC",
+          "type": "D-2"
+        },
+        "source": "guide §4.1.1.1 : prévisions agrégées J-3, J-2 et J-1 des installations sous obligation d'achat avec EDF, deux appels par jour ; sous-types DA01 (fin de matinée) et DA02 (début d'après-midi)"
       }
     },
     "series": {
@@ -206,10 +236,15 @@
       "solaire": {"ressource": "production", "type": "D-1", "production_type": ["SOLAR"]},
       "eolien": {"ressource": "production", "type": "D-1", "production_type": ["WIND_ONSHORE", "WIND_OFFSHORE"]},
       "consommation_j2": {"ressource": "consommation_j2", "type": "D-2"},
-      "solaire_j2": {"ressource": "production", "type": "D-2", "production_type": ["SOLAR"]},
-      "eolien_j2": {"ressource": "production", "type": "D-2", "production_type": ["WIND_ONSHORE", "WIND_OFFSHORE"]}
+      "solaire_courante": {"ressource": "production_courante", "type": "CURRENT", "production_type": ["SOLAR"], "figer_avant_limite": true},
+      "eolien_courante": {"ressource": "production_courante", "type": "CURRENT", "production_type": ["WIND_ONSHORE", "WIND_OFFSHORE"], "figer_avant_limite": true},
+      "oa_j2": {"ressource": "oa_j2", "type": "D-2", "production_type": ["AGGREGATED_CPC"]}
     },
-    "horaires_publication": "Guide Generation Forecast §4.1.1.1 : solaire et éolien J-1 à appeler vers 17h, échéance réglementaire 18h ; « courante » mise à jour vers 9h30 et 19h30. La prévision J-1 n'existe donc pas à 9h en J-1 : l'agent utilise la D-2.",
+    "charges_residuelles": {
+      "charge_residuelle": ["consommation", "solaire", "eolien"],
+      "charge_residuelle_limite": ["consommation_j2", "solaire_courante", "eolien_courante"]
+    },
+    "horaires_publication": "Guide Generation Forecast §4.1.1.1 : solaire et éolien J-1 à appeler vers 17h, échéance réglementaire 18h ; « courante » mise à jour vers 9h30 et 19h30. La J-1 n'existe donc pas à 9h en J-1. J-2 n'est décrite que pour l'agrégat OA et la MDSE (SOLAR + D-2 : erreur 400 constatée le 21/09/2026, probablement F08). Entrées de l'agent : courante photographiée avant la limite (à partir d'aujourd'hui seulement) et OA J-2 (historique possible).",
     "marges": "API à identifier (publiée sur la page équilibrage de services-rte) : non branchée"
   },
   "indisponibilites": {

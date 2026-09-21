@@ -113,7 +113,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.6</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.7</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -152,6 +152,7 @@
         <dt>aFRR seul</dt><dd>Même calcul sans aucun échange DA : la batterie ne fait que vendre de la capacité aFRR. Atteignable en capacité, mais les activations réelles la déséquilibrent (voir la rangée « avec énergie activée »).</dd>
         <dt>Réaliste, règle de 9h</dt><dd>La séquence vraie. À 9h J−1, une règle fixe dépose des offres : baisse sur certaines plages, hausse sur d'autres, une part de la puissance, un prix plancher. On constate ensuite sur le prix marginal publié où l'offre aurait été retenue (payée au marginal), puis on optimise le DA à 12h avec ces réserves figées. Aucune prévision : la règle ne regarde pas le DA. Atteignable ; c'est le chiffre à opposer à un agrégateur. Règle en vigueur affichée dans le bloc des revenus et modifiable dans config/parametres.json.</dd>
         <dt>Énergie activée</dt><dd>Une fois la journée livrée, on estime l'énergie réellement activée sur les MW réservés : part activée = taux national (volume activé / besoin RTE) par pas 15 min, prix = prix moyens pondérés RTE, convention des Règles de marché (à la baisse le fournisseur paie si le prix est positif, à la hausse il est payé). Les activations qui feraient sortir le SoC de 5-95 % ou dépasser 2 cycles sont supposées refusées par le prix d'offre en énergie et comptées à part. L'écart de SoC en fin de journée est valorisé au prix DA moyen de la journée (surplus revendu, manque racheté, rendement compris). Si l'ensemble ressort négatif, on considère qu'aucune offre en énergie n'est déposée ce jour-là : total avec énergie égal au total sans, et le coût évité est indiqué. Provisoire tant que les 96 pas ne sont pas publiés.</dd>
+        <dt>Agent, règle adaptative</dt><dd>Un agent qui choisit chaque jour la règle d'offre aFRR de la stratégie réaliste au lieu de la garder fixe. La grille compte 480 règles : 6 découpages de plages de baisse, 5 de hausse, 4 parts de puissance (25 à 100 %) et 4 prix planchers (2 à 20 €/MW/h). Chaque journée livrée est rejouée avec chacune de ces règles, selon la méthode de la stratégie réaliste : offre retenue si le prix marginal publié atteint le plancher, DA optimisé ensuite avec ces réserves figées, énergie activée estimée, TURPE déduit. Pour la journée J, l'agent retient avant 8h45 en J−1 la règle qui maximise la moyenne moins 0,5 écart-type du revenu total sur les 30 derniers jours collectés jusqu'à J−2 inclus. La veille (J−1) n'est pas encore livrée au moment du choix. L'écart-type pénalise une règle qui ne gagnerait que grâce à un jour exceptionnel. La décision est recalculée à chaque collecte jusqu'à 8h45 en J−1, puis figée. Pour les jours antérieurs à sa mise en service, la décision est reconstituée avec la même règle de calcul et signalée comme telle ; une seule approximation : les activations de J−2 sont supposées complètes à 8h45 en J−1. L'agent ne regarde encore ni les prévisions de consommation et de production ni les indisponibilités (approche 2, en préparation). Il ne peut pas faire mieux que la meilleure règle de la grille, affichée pour comparaison. Calculé en raccordement BT ; paramètres dans config/parametres.json, section agent.</dd>
       </dl>
     </details>
   </div>
@@ -174,6 +175,18 @@
     </div>
   </div>
 
+  <div class="bloc" id="bloc-agent">
+    <div class="bloc-titre"><h2>Agent : règle décidée avant 9h en J−1</h2><span class="note" id="agent-note"></span><span class="unite">€/MW net TURPE, avec énergie</span></div>
+    <div class="note" id="agent-demain" style="color:var(--jaune);margin-bottom:6px"></div>
+    <div class="note" id="agent-regle" style="margin-bottom:12px"></div>
+    <div class="tuiles quatre" style="margin-bottom:0">
+      <div class="tuile" style="--coul:#38bdf8"><div class="lib">Agent, réalisé</div><div class="val" id="a-v-agent">—</div><div class="sub" id="a-s-agent"></div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Règle fixe, même méthode</div><div class="val" id="a-v-fixe">—</div><div class="sub" id="a-s-fixe"></div></div>
+      <div class="tuile" style="--coul:#38bdf8"><div class="lib">Agent moins règle fixe</div><div class="val" id="a-v-ecart">—</div><div class="sub" id="a-s-ecart"></div></div>
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Part de l'optimum captée</div><div class="val" id="a-v-part">—</div><div class="sub" id="a-s-part"></div></div>
+    </div>
+    <div class="graphe" id="agent-graphe" style="margin-top:14px" hidden><canvas id="g-agent"></canvas></div>
+  </div>
 
   <div class="bloc" id="bloc-perso">
     <div class="bloc-titre"><h2>Ma stratégie</h2><span class="note">Règles simulées pas à pas sur la sélection, SoC reporté d'un jour à l'autre, mêmes contraintes et même TURPE que le scénario affiché. Plages au format 08:00-11:00, 18:00-22:00 (vide = jamais).</span></div>
@@ -346,7 +359,7 @@ document.querySelectorAll(".bloc").forEach((b, i) => {
   btn.addEventListener("click", () => { b.classList.toggle("replie"); maj(); try{ localStorage.setItem("bess-replie-" + id, b.classList.contains("replie") ? "1" : "0"); }catch(e){} });
   titre.insertBefore(btn, titre.firstChild);
 });
-document.querySelectorAll("#bloc-revenus .tuile, #bloc-perso .tuile").forEach(t => { t.classList.add("cliquable"); t.addEventListener("click", () => t.classList.toggle("ouverte")); });
+document.querySelectorAll("#bloc-revenus .tuile, #bloc-perso .tuile, #bloc-agent .tuile").forEach(t => { t.classList.add("cliquable"); t.addEventListener("click", () => t.classList.toggle("ouverte")); });
 document.querySelectorAll(".agrandir").forEach(b => b.addEventListener("click", () => {
   const bloc = b.closest(".bloc");
   if(document.fullscreenElement) document.exitFullscreen(); else bloc.requestFullscreen();
@@ -891,12 +904,65 @@ async function calculerPerso(){
 }
 document.getElementById("p-calculer").addEventListener("click", calculerPerso);
 
+// ----- agent, règle adaptative (scripts/regle_adaptative.py)
+let grapheAgent = null;
+const fmtHeure = iso => iso ? new Date(iso).toLocaleString("fr-FR", {timeZone:"Europe/Paris", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "";
+const signe = v => (v >= 0 ? "+" : "") + fmt(v, 0);
+async function chargerAgent(){
+  const jours = joursSelection(), boite = document.getElementById("agent-graphe");
+  if(grapheAgent){ grapheAgent.destroy(); grapheAgent = null; }
+  boite.hidden = true;
+  for(const s of ["agent","fixe","ecart","part"]){ txt("a-v-" + s, "—"); txt("a-s-" + s, ""); }
+  txt("agent-regle", ""); txt("agent-note", "");
+  const ia = await lire("data/agent/index.json");
+  if(!ia || !ia.decisions || !ia.decisions.length){ txt("agent-demain", "Agent pas encore calculé : lancer le workflow « Agent, rattrapage historique » sur GitHub, puis attendre la collecte suivante."); return; }
+  // dernière décision disponible : en principe demain
+  const derJ = ia.decisions[ia.decisions.length - 1], der = await lire(`data/agent/decisions/${derJ}.json`);
+  if(der) txt("agent-demain", `Décision pour le ${fmtJour(derJ)} (${der.fige ? (der.reconstitue ? "reconstituée" : "figée à " + fmtHeure(der.limite_decision)) : "provisoire, figée à " + fmtHeure(der.limite_decision)}) : ${der.regle.texte}. Attendu ${fmt(der.attendu.moyenne,0)} €/MW/j (p10 ${fmt(der.attendu.p10,0)}, p90 ${fmt(der.attendu.p90,0)}) sur ${der.fenetre.nb_jours} jours du ${fmtJour(der.fenetre.du)} au ${fmtJour(der.fenetre.au)}` + (der.regle_fixe_attendu ? `, contre ${fmt(der.regle_fixe_attendu.moyenne,0)} pour la règle fixe.` : "."));
+  if(cleScenario() !== ia.scenario) txt("agent-note", `calculé en raccordement ${ia.scenario}, pas pour le raccordement affiché`);
+  const decs = [];
+  for(const j of jours){ const d = await lire(`data/agent/decisions/${j}.json`); if(d) decs.push(d); }
+  if(!decs.length){ txt("agent-regle", "Pas de décision de l'agent pour la sélection (il lui faut 30 jours d'historique évalués avant le jour choisi)."); return; }
+  const faits = decs.filter(d => d.realise && d.realise.total !== null && d.realise.total !== undefined && d.realise.regle_fixe !== null && d.realise.regle_fixe !== undefined);
+  const unique = jours.length === 1, d0 = decs[0];
+  if(unique) txt("agent-regle", `Règle retenue ${d0.reconstitue ? "(décision reconstituée, jour antérieur à la mise en service)" : "le " + fmtHeure(d0.calcule_le) + (d0.fige ? ", figée" : ", provisoire")} : ${d0.regle.texte}. Choisie sur ${d0.fenetre.nb_jours} jours du ${fmtJour(d0.fenetre.du)} au ${fmtJour(d0.fenetre.au)} : moyenne ${fmt(d0.attendu.moyenne,0)} €/MW/j, écart-type ${fmt(d0.attendu.ecart_type,0)}, score ${fmt(d0.attendu.score,0)}.`);
+  else { const freq = new Map(); for(const d of decs) freq.set(d.regle.texte, (freq.get(d.regle.texte) || 0) + 1);
+    const top = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    txt("agent-regle", `${decs.length} décisions sur la sélection, ${freq.size} règles différentes. Les plus fréquentes : ` + top.map(([t, k]) => `${t} (${k} j)`).join(" · ")); }
+  if(!faits.length){ txt("a-s-agent", unique ? "journée pas encore livrée ou activations incomplètes" : "aucune journée évaluée"); return; }
+  const n = faits.length, S = f => faits.reduce((a, d) => a + (Number(f(d.realise)) || 0), 0);
+  const ag = S(r => r.total), fx = S(r => r.regle_fixe), dz = S(r => r.da_seul);
+  const avecOpt = faits.filter(d => d.realise.optimum !== null && d.realise.optimum !== undefined);
+  const agO = avecOpt.reduce((a, d) => a + d.realise.total, 0), op = avecOpt.reduce((a, d) => a + d.realise.optimum, 0);
+  const best = S(r => r.meilleure_regle_a_posteriori), parJ = v => unique ? "" : ` (${fmt(v / n, 0)}/j)`;
+  txt("a-v-agent", fmt(ag, 0));
+  txt("a-s-agent", unique ? `capacité + DA ${fmt(faits[0].realise.capacite_da,0)}, énergie ${signe(faits[0].realise.total - faits[0].realise.capacite_da)} · attendu ${fmt(faits[0].attendu.moyenne,0)} (p10 ${fmt(faits[0].attendu.p10,0)}, p90 ${fmt(faits[0].attendu.p90,0)})`
+    : `€/MW sur ${n} jours évalués${parJ(ag)}${decs.length > n ? ", " + (decs.length - n) + " jours pas encore complets exclus" : ""}`);
+  txt("a-v-fixe", fmt(fx, 0));
+  txt("a-s-fixe", `règle de config/parametres.json rejouée par l'agent${parJ(fx)} · DA seul ${fmt(dz,0)}`);
+  txt("a-v-ecart", signe(ag - fx));
+  txt("a-s-ecart", `€/MW${parJ(ag - fx)} · ${faits.filter(d => d.realise.total > d.realise.regle_fixe).length} jours gagnés, ${faits.filter(d => d.realise.total < d.realise.regle_fixe).length} perdus sur ${n}`);
+  txt("a-v-part", op > 0 ? fmt(100 * agO / op, 0) + " %" : "—");
+  txt("a-s-part", `optimum + énergie ${fmt(op,0)} €/MW sur ${avecOpt.length} j · meilleure règle de la grille a posteriori ${fmt(best,0)} €/MW (${fmt(best > 0 ? 100 * ag / best : NaN,0)} % captés)`);
+  if(!unique){
+    boite.hidden = false;
+    const cumul = f => { let s = 0; return faits.map(d => { const v = f(d.realise); s += (v === null || v === undefined) ? 0 : v; return s; }); };
+    grapheAgent = new Chart(document.getElementById("g-agent"), {type:"line", data:{labels: faits.map(d => fmtJour(d.jour)), datasets:[
+      {label:"Agent", data: cumul(r => r.total), borderColor:"#38bdf8", borderWidth:2, pointRadius:0},
+      {label:"Règle fixe", data: cumul(r => r.regle_fixe), borderColor:couleur("--orange"), borderWidth:1.5, pointRadius:0},
+      {label:"DA seul", data: cumul(r => r.da_seul), borderColor:couleur("--cyan"), borderWidth:1, borderDash:[4,3], pointRadius:0},
+      {label:"Meilleure règle a posteriori", data: cumul(r => r.meilleure_regle_a_posteriori), borderColor:couleur("--violet"), borderWidth:1, borderDash:[2,2], pointRadius:0},
+      {label:"Optimum + énergie", data: cumul(r => r.optimum), borderColor:"#c9d1d9", borderWidth:1, pointRadius:0}]},
+      options: opts("€/MW cumulés", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${fmt(c.parsed.y,0)} €/MW`}}}})});
+  }
+}
+
 function rafraichir(){
   const j = joursSelection();
   txt("sel-resume", !j.length ? "Aucun jour sélectionné" : j.length === 1 ? `Journée ${fmtJour(j[0])}` : `Du ${fmtJour(j[0])} au ${fmtJour(j[j.length-1])}, ${j.length} jours`);
   persoResultat = null; document.getElementById("p-tuiles").hidden = true;
   txt("depot-jour", jourDepot() ? "pour le " + fmtJour(jourDepot()) + (j.length > 1 ? " (dernier jour de la sélection)" : "") : "");
-  chargerDA(); chargerAfrr(); chargerResultats();
+  chargerDA(); chargerAfrr(); chargerResultats(); chargerAgent();
 }
 
 (async () => {

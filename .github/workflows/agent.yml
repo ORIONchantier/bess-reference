@@ -1,0 +1,39 @@
+name: Agent, rattrapage historique
+
+# Évalue toutes les règles de la grille sur tout l'historique, puis reconstitue les décisions de l'agent.
+# À lancer une fois après l'installation, puis à chaque changement de la grille ou des paramètres de la batterie.
+# Durée : de l'ordre d'une heure pour 600 jours (estimation, à constater au premier passage).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collecte
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests numpy scipy
+      - name: Évaluation de la grille et décisions
+        run: python scripts/regle_adaptative.py --tout
+      - name: Enregistrement des données dans le dépôt
+        if: always()
+        run: |
+          git config user.name "robot-collecte"
+          git config user.email "robot@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "Agent : rattrapage $(date -u +%F)"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && break
+            echo "push refusé, nouvelle tentative $i" ; sleep 10
+          done

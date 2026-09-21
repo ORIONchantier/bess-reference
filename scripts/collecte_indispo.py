@@ -52,7 +52,7 @@ def versions(token: str, debut: dt.datetime, fin: dt.datetime):
     (date_type EVENT_DATE, GEUN-RG02). Pagination : code 206 + continuation_token, à renvoyer en entête dans les 60 s
     (GEUN-RG17/RG18). Le guide place le jeton « en entête de réponse » : on le cherche dans les entêtes puis dans le corps."""
     params = {"date_type": "EVENT_DATE", "start_date": utc(debut), "end_date": utc(fin), "fuel_type": ",".join(FILIERES)}
-    out, jeton, pages = [], None, 0
+    out, jeton, pages, total = [], None, 0, None
     while True:
         h = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         if jeton:
@@ -69,7 +69,13 @@ def versions(token: str, debut: dt.datetime, fin: dt.datetime):
         corps = r.json() if r.content else {}
         out += corps.get("generation_unavailabilities", [])
         pages += 1
-        jeton = r.headers.get("continuation_token") or corps.get("continuation_token")
+        if total is None and isinstance(corps.get("total_match"), int):
+            total = corps["total_match"]                                   # nombre total de versions (§6.1.1.3)
+        jeton = (r.headers.get("continuation_token") or r.headers.get("continuation-token")
+                 or corps.get("continuation_token"))
+        if pages == 1:
+            print(f"  HTTP {r.status_code}, total_match {total}, {len(out)} versions reçues, "
+                  f"entêtes : {', '.join(k for k in r.headers if 'token' in k.lower() or 'range' in k.lower()) or 'aucun jeton'}")
         if r.status_code != 206:
             break
         if not jeton:
@@ -77,7 +83,9 @@ def versions(token: str, debut: dt.datetime, fin: dt.datetime):
             break
         if pages >= 200:
             raise RuntimeError("pagination anormalement longue")
-    return out, pages
+    if total is not None and len(out) < total:
+        print(f"  INCOMPLET : {len(out)} versions lues sur {total} annoncées")
+    return out, pages, total
 
 
 def cle_version(v):
@@ -131,7 +139,7 @@ def courbe(evts, jour: dt.date):
     return qs, total, par_type
 
 
-def calculer(vs, jour: dt.date, pages: int):
+def calculer(vs, jour: dt.date, pages: int, total=None):
     lim = limite_decision(jour)
     maintenant = dt.datetime.now(UTC)
     ev_lim, ev_der = connues(vs, lim), connues(vs, None)
@@ -141,7 +149,8 @@ def calculer(vs, jour: dt.date, pages: int):
               for q, a, b in zip(qs, t_lim, t_der)]
     meta = {"jour": jour.isoformat(), "filieres": FILIERES, "limite_decision": lim.isoformat(),
             "provisoire": maintenant < lim, "calcule_le": maintenant.astimezone(PARIS).isoformat(timespec="minutes"),
-            "versions_lues": len(vs), "pages": pages, "evenements_a_la_limite": len(ev_lim), "evenements_derniere": len(ev_der),
+            "versions_lues": len(vs), "pages": pages, "total_match": total,
+            "complet": total is not None and len(vs) >= total,"evenements_a_la_limite": len(ev_lim), "evenements_derniere": len(ev_der),
             "unites_par_type": types,
             "moyenne_limite_mw": round(sum(t_lim) / len(t_lim), 0) if t_lim else None,
             "moyenne_derniere_mw": round(sum(t_der) / len(t_der), 0) if t_der else None}
@@ -160,7 +169,9 @@ def a_refaire(jour: dt.date) -> bool:
     if not m.exists():
         return True
     try:
-        return bool(json.loads(m.read_text()).get("provisoire", True))
+        meta = json.loads(m.read_text())
+        # à refaire tant que l'heure limite n'est pas passée, ou si la lecture n'a pas été prouvée complète
+        return bool(meta.get("provisoire", True)) or not meta.get("complet", False)
     except Exception:
         return True
 
@@ -173,8 +184,10 @@ def main():
         demain = dt.datetime.now(PARIS).date() + dt.timedelta(days=1)
         if force or a_refaire(demain):
             d0, d1 = bornes(demain)
-            vs, pages = versions(token, d0, d1)
-            calculer(vs, demain, pages)
+            vs, pages, total = versions(token, d0, d1)
+            calculer(vs, demain, pages, total)
+        else:
+            print(f"indispo {demain} : déjà définitif (heure limite passée, lecture complète), rien à refaire")
     else:
         du, au = dt.date.fromisoformat(args[0]), dt.date.fromisoformat(args[-1])
         d = du
@@ -184,10 +197,10 @@ def main():
             jours = [j for j in jours if force or a_refaire(j)]
             if jours:
                 try:
-                    vs, pages = versions(token, bornes(jours[0])[0], bornes(jours[-1])[1])
-                    print(f"indispo {d} -> {f} : {len(vs)} versions, {pages} page(s)")
+                    vs, pages, total = versions(token, bornes(jours[0])[0], bornes(jours[-1])[1])
+                    print(f"indispo {d} -> {f} : {len(vs)} versions sur {total} annoncées, {pages} page(s)")
                     for j in jours:
-                        calculer(vs, j, pages)
+                        calculer(vs, j, pages, total)
                 except Exception as e:
                     print(f"indispo {d} -> {f} : échec, {e}")
                 if f < au:

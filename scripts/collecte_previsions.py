@@ -1,12 +1,15 @@
-"""Collecte des prévisions RTE pour J+1 (et J) : consommation, production solaire et éolienne, charge résiduelle
-prévue = consommation - solaire - éolien. Ressources et séries dans config/parametres.json (section previsions).
+"""Collecte des prévisions RTE pour J+1 (et J) : consommation, production solaire et éolienne, charges résiduelles.
+Ressources, séries et combinaisons dans config/parametres.json (section previsions).
 
-Production : API Generation Forecast v3 (guide v03.01.01, §4.1). Deux échéances sont gardées :
-  - D-1 (calculée la veille, appel conseillé vers 17h, échéance réglementaire 18h) : la meilleure, mais publiée APRÈS
-    la clôture aFRR de 9h en J-1. Sert à l'affichage et au DA, pas à une décision prise avant 9h.
-  - D-2 (calculée l'avant-veille) : celle dont on dispose à 9h en J-1. C'est l'entrée de l'agent.
-Chaque valeur porte updated_date : le fichier <jour>.meta.json indique, par série, si elle était publiée avant l'heure
-limite de décision (section decision). La réponse brute est toujours stockée dans <jour>.raw.json."""
+Production : API Generation Forecast v3 (guide v03.01.01, §4.1). Pour le solaire et l'éolien, le guide ne décrit que
+les échéances J-1 (appel vers 17h, échéance réglementaire 18h), infrajournalière et courante (mise à jour vers 9h30 et
+19h30) ; J-2 et J-3 ne sont citées que pour l'agrégat OA et la MDSE, et une combinaison type/filière non prévue renvoie
+l'erreur GENFORECAST_FORECASTS_F08. D'où :
+  - D-1 solaire et éolien : la meilleure prévision, publiée APRÈS la clôture aFRR de 9h. Affichage, DA, pas l'agent.
+  - CURRENT solaire et éolien : photographiée avant l'heure limite et figée ensuite (option figer_avant_limite).
+    L'API ne garde que la dernière version : cet historique ne peut se construire qu'au fil de l'eau, à partir d'aujourd'hui.
+  - AGGREGATED_CPC D-2 : agrégat des installations sous obligation d'achat, disponible la veille, historique possible.
+Chaque valeur porte updated_date : <jour>.meta.json indique par série si elle était publiée avant l'heure limite."""
 import json, sys, datetime as dt
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -82,6 +85,11 @@ def serie(pts_ressource, spec):
                      "filieres_absentes": absentes}
 
 
+def detail_erreur(e: Exception) -> str:
+    rep = getattr(e, "response", None)
+    return f"{e}" + (f" | réponse : {rep.text[:400]}" if rep is not None and rep.text else "")
+
+
 def collecter(token, jour: dt.date, save_raw=True):
     start = dt.datetime.combine(jour, dt.time(0), PARIS)
     params = {"start_date": start.isoformat(timespec="seconds"),
@@ -95,17 +103,37 @@ def collecter(token, jour: dt.date, save_raw=True):
             if not pts[nom]:
                 print("  réponse brute :", json.dumps(payload)[:300])
         except Exception as e:
-            print(f"prévision {nom} {jour} : échec, {e}")
+            print(f"prévision {nom} {jour} : échec, {detail_erreur(e)}")
+    d = DATA / "previsions"
     limite = limite_decision(jour)
+    maintenant = dt.datetime.now(PARIS)
+    # fichier précédent : sert à garder les séries figées à l'heure limite
+    try:
+        prec_lignes = {l["debut"]: l for l in json.loads((d / f"{jour.isoformat()}.json").read_text())}
+        prec_meta = json.loads((d / f"{jour.isoformat()}.meta.json").read_text()).get("series", {})
+    except Exception:
+        prec_lignes, prec_meta = {}, {}
     series, meta = {}, {"jour": jour.isoformat(), "limite_decision": limite.isoformat(), "series": {},
-                        "calcule_le": dt.datetime.now(PARIS).isoformat(timespec="minutes")}
+                        "calcule_le": maintenant.isoformat(timespec="minutes")}
     for nom, spec in PREV.get("series", {}).items():
-        if spec["ressource"] not in pts:
+        valeurs, m = serie(pts[spec["ressource"]], spec) if spec["ressource"] in pts else ({}, None)
+        if m is not None:
+            m["avant_limite"] = (lire_iso(m["maj_max"]) <= limite) if m["maj_max"] else None      # None : pas de date publiée
+            if m["avant_limite"] is None and spec.get("figer_avant_limite"):
+                m["avant_limite"] = maintenant <= limite                  # à défaut, l'heure de la photographie
+        if spec.get("figer_avant_limite"):
+            p = prec_meta.get(nom)
+            if p and p.get("avant_limite") and not (m and m["avant_limite"]):
+                # la photographie prise avant la limite est conservée ; la version plus récente est ignorée
+                valeurs = {k: l.get(nom + "_mw") for k, l in prec_lignes.items()}
+                m = dict(p, fige=True)
+            elif maintenant > limite and not (p and p.get("avant_limite")) and not (m and m["avant_limite"]):
+                m = dict(m or {}, indisponible_a_la_limite=True)      # aucun passage avant la limite ce jour-là
+                valeurs = {}
+        if m is None:
             continue
-        valeurs, m = serie(pts[spec["ressource"]], spec)
-        m["avant_limite"] = (lire_iso(m["maj_max"]) <= limite) if m["maj_max"] else None      # None : pas de date de mise à jour publiée
         series[nom], meta["series"][nom] = valeurs, m
-        if m["filieres_absentes"]:
+        if m.get("filieres_absentes"):
             print(f"  {nom} {jour} : filières sans valeur, comptées à 0 : {', '.join(m['filieres_absentes'])}")
     if not any(series.values()):
         return False
@@ -114,18 +142,19 @@ def collecter(token, jour: dt.date, save_raw=True):
     for k in cles:
         l = {"debut": k}
         for nom in series: l[nom + "_mw"] = series[nom].get(k)
-        for suffixe in ("", "_j2"):
-            conso, sol, eol = (l.get(f"{n}{suffixe}_mw") for n in ("consommation", "solaire", "eolien"))
+        for nom_cr, (c_, s_, e_) in PREV.get("charges_residuelles", {}).items():
+            conso, sol, eol = l.get(c_ + "_mw"), l.get(s_ + "_mw"), l.get(e_ + "_mw")
             # une composante manquante rend la charge résiduelle inconnue : pas de zéro implicite
-            l[f"charge_residuelle{suffixe}_mw"] = conso - sol - eol if None not in (conso, sol, eol) else None
+            l[nom_cr + "_mw"] = conso - sol - eol if None not in (conso, sol, eol) else None
         lignes.append(l)
-    d = DATA / "previsions"; d.mkdir(exist_ok=True)
+    d.mkdir(exist_ok=True)
     (d / f"{jour.isoformat()}.json").write_text(json.dumps(lignes, ensure_ascii=False))
     (d / f"{jour.isoformat()}.meta.json").write_text(json.dumps(meta, ensure_ascii=False))
     if save_raw:
         (d / f"{jour.isoformat()}.raw.json").write_text(json.dumps(brut, ensure_ascii=False))
     for nom, m in meta["series"].items():
-        print(f"  {nom} {jour} : mise à jour {m['maj_min']} -> {m['maj_max']}, avant la limite de {LIMITE} J-1 : {m['avant_limite']}")
+        print(f"  {nom} {jour} : mise à jour {m.get('maj_min')} -> {m.get('maj_max')}, avant la limite de {LIMITE} J-1 : "
+              f"{m.get('avant_limite')}{', figée' if m.get('fige') else ''}")
     return True
 
 

@@ -103,7 +103,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-21.12</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-21.13</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -155,7 +155,7 @@
       <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real"></div></div>
       <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt"></div></div>
     </div>
-    <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées, offre indexée sur le spot)</div>
+    <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées, offres en énergie à prix couvrant)</div>
     <div class="tuiles quatre" style="margin-bottom:0">
       <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">identique : aucune réserve, donc aucune activation</div></div>
       <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr"></div></div>
@@ -241,7 +241,7 @@
       <label><input type="radio" name="strat" value="da_seul"> DA seul</label>
       <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
       <label><input type="radio" name="strat" value="realiste"> Réaliste</label>
-      <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (offre indexée sur le spot, plafonds SoC et cycles). En multi-jours : moyenne par quart d'heure.</span>
+      <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (prix d'offre couvrant le coût de remplacement, plafonds SoC et cycles). En multi-jours : moyenne par quart d'heure.</span>
       <span class="unite">kW et SoC % · pas 15 min</span>
       <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
     </div>
@@ -305,6 +305,7 @@ const heureParis = iso => fmtParis.format(new Date(iso));
 const parDate = (a, b) => new Date(a.debut) - new Date(b.debut);
 const somme = (arr, f) => arr.reduce((s, p) => s + (Number(f(p)) || 0), 0);
 const moy = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+const fmtJour = iso => iso ? iso.slice(8,10) + "-" + iso.slice(5,7) + "-" + iso.slice(0,4) : "";
 const fmt = (v, d=0) => (v===null || v===undefined || isNaN(v)) ? "—" : Number(v).toLocaleString("fr-FR", {maximumFractionDigits:d});
 const txt = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
 const grille = {grid:{color:"#1a2231"}};
@@ -531,7 +532,7 @@ async function chargerResultats(){
   if(!unique){
     const noms = {da_seul:"DA seul", afrr_seul:"aFRR seul + énergie", realiste:"Réaliste + énergie", optimum:"Optimum + énergie"};
     const coul = {da_seul: couleur("--cyan"), afrr_seul: couleur("--vert"), realiste: couleur("--orange"), optimum: "#c9d1d9"};
-    grapheParJour = new Chart(document.getElementById("g-parjour"), {type:"bar", data:{labels: lus.map(l => l.jour), datasets: STRATS.map(s => ({label: noms[s], data: parJour[s], backgroundColor: coul[s]}))},
+    grapheParJour = new Chart(document.getElementById("g-parjour"), {type:"bar", data:{labels: lus.map(l => fmtJour(l.jour)), datasets: STRATS.map(s => ({label: noms[s], data: parJour[s], backgroundColor: coul[s]}))},
       options: opts("€/MW/jour", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${fmt(c.parsed.y,0)} €/MW`}}}})});
   }
   // plan moyen par stratégie
@@ -648,7 +649,7 @@ document.getElementById("ida-verifier").addEventListener("click", () => {
   if(!creneaux.length || !lignes.length){ etat.textContent = `Rien de lisible : ${creneaux.length} créneaux, ${lignes.length} lignes de valeurs.`; return; }
   if(creneaux.length !== lignes.length){ etat.textContent = `${creneaux.length} créneaux pour ${lignes.length} lignes de valeurs : collage incomplet ou mélangé.`; return; }
   const prix = lignes.map(l => l[3]);
-  etat.textContent = `${ench} du ${jourDepot()} : ${creneaux.length} pas${creneaux.length === attendu ? "" : " (attendu " + attendu + ")"}, premier créneau ${String(creneaux[0][0]).padStart(2,"0")}:${String(creneaux[0][1]).padStart(2,"0")}, prix de ${fmt(Math.min(...prix),2)} à ${fmt(Math.max(...prix),2)} €/MWh. Prêt à envoyer.`;
+  etat.textContent = `${ench} du ${fmtJour(jourDepot())} : ${creneaux.length} pas${creneaux.length === attendu ? "" : " (attendu " + attendu + ")"}, premier créneau ${String(creneaux[0][0]).padStart(2,"0")}:${String(creneaux[0][1]).padStart(2,"0")}, prix de ${fmt(Math.min(...prix),2)} à ${fmt(Math.max(...prix),2)} €/MWh. Prêt à envoyer.`;
   envoyer.disabled = false;
 });
 document.getElementById("ida-envoyer").addEventListener("click", async () => {
@@ -671,7 +672,7 @@ document.getElementById("ida-envoyer").addEventListener("click", async () => {
     if(sha) corps.sha = sha;
     const r = await fetch(url, {method:"PUT", headers: {...entetes, "Content-Type":"application/json"}, body: JSON.stringify(corps)});
     if(!r.ok){ const err = await r.json().catch(() => ({})); etat.textContent = "Échec GitHub " + r.status + " : " + (err.message || ""); return; }
-    etat.textContent = `${ench} du ${jour} ${sha ? "remplacée" : "déposée"}. Conversion lancée, la page se met à jour dans une à deux minutes (Ctrl+F5).`;
+    etat.textContent = `${ench} du ${fmtJour(jour)} ${sha ? "remplacée" : "déposée"}. Conversion lancée, la page se met à jour dans une à deux minutes (Ctrl+F5).`;
     document.getElementById("ida-texte").value = "";
   }catch(e){ etat.textContent = "Erreur réseau : " + e.message; envoyer.disabled = false; }
 });
@@ -715,8 +716,8 @@ document.getElementById("sites-fichier").addEventListener("change", async e => {
 
 function rafraichir(){
   const j = joursSelection();
-  txt("sel-resume", !j.length ? "Aucun jour sélectionné" : j.length === 1 ? `Journée ${j[0]}` : `Du ${j[0]} au ${j[j.length-1]}, ${j.length} jours`);
-  txt("depot-jour", jourDepot() ? "pour le " + jourDepot() + (j.length > 1 ? " (dernier jour de la sélection)" : "") : "");
+  txt("sel-resume", !j.length ? "Aucun jour sélectionné" : j.length === 1 ? `Journée ${fmtJour(j[0])}` : `Du ${fmtJour(j[0])} au ${fmtJour(j[j.length-1])}, ${j.length} jours`);
+  txt("depot-jour", jourDepot() ? "pour le " + fmtJour(jourDepot()) + (j.length > 1 ? " (dernier jour de la sélection)" : "") : "");
   chargerDA(); chargerAfrr(); chargerResultats();
 }
 
@@ -744,7 +745,7 @@ function rafraichir(){
     calMois = new Date(ref.getFullYear(), ref.getMonth(), 1);
     dessinerCal(); rafraichir();
     const en = idx.afrr_energie || [];
-    for(const j of [...en].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=j; selEn.appendChild(o); }
+    for(const j of [...en].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=fmtJour(j); selEn.appendChild(o); }
     if(en.length){ selEn.value = en[en.length-1]; chargerEnergie(selEn.value); }
     else { const v=document.getElementById("vide-energie"); v.hidden=false; v.textContent="Aucune journée d'activation collectée pour l'instant."; }
   }catch(e){

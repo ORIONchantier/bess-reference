@@ -311,7 +311,7 @@ def main():
     d0 = dt.date.fromisoformat(min(ev))
     cibles = [d0 + dt.timedelta(days=k) for k in range((demain - d0).days + 1)]
     (DOSSIER / "decisions").mkdir(exist_ok=True)
-    nouvelles = 0
+    nouvelles = supprimees = 0
     for D in cibles:
         p = DOSSIER / "decisions" / f"{D.isoformat()}.json"
         dec = None
@@ -320,11 +320,15 @@ def main():
                 dec = json.loads(p.read_text())
             except Exception:
                 dec = None
-        if dec and dec.get("signature") != SIGNATURE:
+        perimee = bool(dec) and dec.get("signature") != SIGNATURE
+        if perimee:
             dec = None                                                          # grille ou modèle changés : on refait
         if dec is None or (not dec.get("fige") and maintenant <= limite_decision(D)):
             neuve = decider(D, ev, jours)
             if neuve is None:
+                if perimee:
+                    p.unlink()          # calculée sur d'anciennes données : retirée tant que sa fenêtre n'est pas réévaluée
+                    supprimees += 1
                 continue
             dec = neuve; nouvelles += 1
         if not dec.get("fige") and maintenant > limite_decision(D):
@@ -362,7 +366,7 @@ def main():
         x = json.loads(dd.read_text())
         print(f"agent décision {demain} ({'figée' if x['fige'] else 'provisoire jusqu à ' + LIMITE + ' J-1'}) : {x['regle']['texte']}, "
               f"attendu {x['attendu']['moyenne']} €/MW/j (score {x['attendu']['score']}), fenêtre {x['fenetre']['du']} -> {x['fenetre']['au']}")
-    print(f"agent : {len(ev)} journées évaluées, {nouvelles} décisions calculées, {len(decisions)} au total")
+    print(f"agent : {len(ev)} journées évaluées, {nouvelles} décisions calculées, {supprimees} décisions périmées retirées, {len(decisions)} au total")
 
 
 if __name__ == "__main__":

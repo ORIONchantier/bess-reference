@@ -130,7 +130,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.11</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.12</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -180,24 +180,6 @@
     </details>
   </div>
 
-  <div class="bloc" id="bloc-revenus">
-    <div class="bloc-titre"><h2>Revenus de référence, €/MW net TURPE</h2><span class="note" id="note-expost"></span></div>
-    <div class="rangee-lib" id="lib-cap">Capacité aFRR + arbitrage DA, sans énergie activée</div>
-    <div class="tuiles quatre">
-      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da"></div></div>
-      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr"></div></div>
-      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real"></div></div>
-      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt"></div></div>
-    </div>
-    <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées, offres en énergie à prix couvrant)</div>
-    <div class="tuiles quatre" style="margin-bottom:0">
-      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">identique : aucune réserve, donc aucune activation</div></div>
-      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr"></div></div>
-      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real"></div></div>
-      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt"></div></div>
-    </div>
-  </div>
-
   <div class="bloc rubrique" id="rub-strategies">
     <div class="bloc-titre"><h2>Stratégies</h2><span class="note">L'agent décide seul avant 9h en J−1 ; « Ma stratégie » applique tes propres règles.</span></div>
 
@@ -212,14 +194,6 @@
       <div class="tuile" style="--coul:var(--texte)"><div class="lib">Part de l'optimum captée</div><div class="val" id="a-v-part">—</div><div class="sub" id="a-s-part"></div></div>
     </div>
     <div class="graphe" id="agent-graphe" style="margin-top:14px" hidden><canvas id="g-agent"></canvas></div>
-  </div>
-
-  <div class="bloc" id="bloc-decomp">
-    <div class="bloc-titre"><h2>Décomposition du revenu : capacité aFRR, day-ahead, énergie aFRR</h2><span class="note" id="decomp-note"></span><span class="unite">€/MW net</span></div>
-    <div class="decomp">
-      <table class="decomp-table" id="decomp-table"></table>
-      <div class="graphe" style="height:300px"><canvas id="g-decomp"></canvas></div>
-    </div>
   </div>
 
   <div class="bloc" id="bloc-perso">
@@ -257,6 +231,32 @@
     </div>
   </div>
 
+  </div>
+
+  <div class="bloc" id="bloc-revenus">
+    <div class="bloc-titre"><h2>Revenus de référence, €/MW net TURPE</h2><span class="note" id="note-expost"></span></div>
+    <div class="rangee-lib" id="lib-cap">Capacité aFRR + arbitrage DA, sans énergie activée</div>
+    <div class="tuiles quatre">
+      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="v-da">—</div><div class="sub" id="s-da"></div></div>
+      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul</div><div class="val" id="v-afrr">—</div><div class="sub" id="s-afrr"></div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste, règle de 9h</div><div class="val" id="v-real">—</div><div class="sub" id="s-real"></div></div>
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum information parfaite</div><div class="val" id="v-opt">—</div><div class="sub" id="s-opt"></div></div>
+    </div>
+    <div class="rangee-lib">Avec l'énergie aFRR activée (estimation sur les activations publiées, offres en énergie à prix couvrant)</div>
+    <div class="tuiles quatre" style="margin-bottom:0">
+      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">DA seul</div><div class="val" id="x-da">—</div><div class="sub" id="xs-da">identique : aucune réserve, donc aucune activation</div></div>
+      <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR seul + énergie</div><div class="val" id="x-afrr">—</div><div class="sub" id="xs-afrr"></div></div>
+      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Réaliste + énergie</div><div class="val" id="x-real">—</div><div class="sub" id="xs-real"></div></div>
+      <div class="tuile" style="--coul:var(--texte)"><div class="lib">Optimum + énergie</div><div class="val" id="x-opt">—</div><div class="sub" id="xs-opt"></div></div>
+    </div>
+  </div>
+
+  <div class="bloc" id="bloc-decomp">
+    <div class="bloc-titre"><h2>Décomposition du revenu : capacité aFRR, day-ahead, énergie aFRR</h2><span class="note" id="decomp-note"></span><span class="unite">€/MW net</span></div>
+    <div class="decomp">
+      <table class="decomp-table" id="decomp-table"></table>
+      <div class="graphe" style="height:300px"><canvas id="g-decomp"></canvas></div>
+    </div>
   </div>
 
   <div class="bloc rubrique" id="rub-chiffres">

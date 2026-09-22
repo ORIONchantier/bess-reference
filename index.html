@@ -112,13 +112,25 @@
   .bloc.rubrique.replie{padding-bottom:14px}
   .export{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
   .export .note{flex-basis:100%;text-align:right}
+  .decomp{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:18px;align-items:start}
+  @media (max-width:1100px){.decomp{grid-template-columns:1fr}}
+  .decomp-table{width:100%;border-collapse:collapse;font-size:12px}
+  .decomp-table th{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--sourd);text-align:right;padding:6px 8px;border-bottom:1px solid var(--bord);font-weight:700}
+  .decomp-table th:first-child{text-align:left}
+  .decomp-table td{padding:4px 8px;text-align:right;white-space:nowrap}
+  .decomp-table td:first-child{text-align:left;white-space:normal;color:var(--sourd)}
+  .decomp-table tr.groupe td{padding-top:12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--coul)}
+  .decomp-table tr.sous td{border-top:1px solid var(--bord);font-weight:700;color:var(--texte)}
+  .decomp-table tr.sous td:first-child{color:var(--coul)}
+  .decomp-table tr.total td{border-top:2px solid var(--bord);font-weight:700;font-size:14px;color:var(--texte);padding-top:8px}
+  .decomp-table .neg{color:var(--rouge)}
 </style>
 </head>
 <body>
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.10</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.11</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -200,6 +212,14 @@
       <div class="tuile" style="--coul:var(--texte)"><div class="lib">Part de l'optimum captée</div><div class="val" id="a-v-part">—</div><div class="sub" id="a-s-part"></div></div>
     </div>
     <div class="graphe" id="agent-graphe" style="margin-top:14px" hidden><canvas id="g-agent"></canvas></div>
+  </div>
+
+  <div class="bloc" id="bloc-decomp">
+    <div class="bloc-titre"><h2>Décomposition du revenu : capacité aFRR, day-ahead, énergie aFRR</h2><span class="note" id="decomp-note"></span><span class="unite">€/MW net</span></div>
+    <div class="decomp">
+      <table class="decomp-table" id="decomp-table"></table>
+      <div class="graphe" style="height:300px"><canvas id="g-decomp"></canvas></div>
+    </div>
   </div>
 
   <div class="bloc" id="bloc-perso">
@@ -1011,6 +1031,74 @@ async function chargerAgent(){
       options: opts("€/MW cumulés", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${fmt(c.parsed.y,0)} €/MW`}}}})});
   }
 }
+// ----- décomposition du revenu : réaliste, agent, optimum
+let grapheDecomp = null;
+async function chargerDecomp(){
+  const jours = joursSelection(), cle = cleScenario(), tab = document.getElementById("decomp-table");
+  if(grapheDecomp){ grapheDecomp.destroy(); grapheDecomp = null; }
+  tab.innerHTML = ""; txt("decomp-note", "");
+  // une colonne par stratégie : somme sur la sélection, en €/MW
+  const vide = () => ({n:0, partiels:0, cap_dn:0, cap_up:0, da_brut:0, turpe_da:0, en_up:0, en_dn:0, en_turpe:0, en_ecart:0, en_net:0, avecEnergie:0});
+  const col = {realiste: vide(), agent: vide(), optimum: vide()};
+  let scAgent = null;
+  for(const j of jours){
+    const [r, dec] = await Promise.all([lire(`data/resultats/${j}.json`), lire(`data/agent/decisions/${j}.json`)]);
+    const sc = r && r.scenarios ? (r.scenarios[cle] || r.scenarios.BT) : null, p = r ? r.puissance_mw : 0.25;
+    for(const s of ["realiste", "optimum"]){
+      const o = sc && sc[s]; if(!o || o.erreur) continue;
+      const c = col[s], xp = sc.ex_post && sc.ex_post[s];
+      c.n++; c.cap_dn += o.afrr_baisse_eur / p; c.cap_up += o.afrr_hausse_eur / p; c.da_brut += o.da_brut_eur / p; c.turpe_da += o.turpe_eur / p;
+      if(xp){ c.avecEnergie++; if(xp.partiel) c.partiels++;
+        c.en_up += xp.revenu_hausse_eur / p; c.en_dn += xp.cout_baisse_eur / p; c.en_turpe += xp.turpe_eur / p; c.en_ecart += xp.valeur_ecart_soc_eur / p; c.en_net += xp.complement_net_eur_par_mw; }
+    }
+    const dcp = dec && dec.decomposition;
+    if(dcp){ const c = col.agent; scAgent = dec.scenario;
+      c.n++; c.cap_dn += dcp.afrr_baisse; c.cap_up += dcp.afrr_hausse; c.da_brut += dcp.da_brut; c.turpe_da += dcp.turpe_da;
+      const e = dcp.energie;
+      if(e){ c.avecEnergie++; if(e.partiel) c.partiels++; c.en_up += e.revenu_hausse; c.en_dn += e.cout_baisse; c.en_turpe += e.turpe; c.en_ecart += e.valeur_ecart_soc; c.en_net += e.net; }
+    }
+  }
+  const S = ["realiste", "agent", "optimum"], noms = {realiste:"Réaliste, règle de 9h", agent:"Agent", optimum:"Optimum"};
+  const coulS = {realiste: couleur("--orange"), agent: "#38bdf8", optimum: "#c9d1d9"};
+  if(!S.some(s => col[s].n)){ tab.innerHTML = '<tr><td class="vide">Pas de calcul pour la sélection.</td></tr>'; return; }
+  const cellule = v => `<td class="${v <= -0.5 ? "neg" : ""}">${fmt(Math.abs(v) < 0.5 ? 0 : v, 0)}</td>`;
+  const ligne = (lib, f, cls = "", coul = "") => `<tr class="${cls}" style="${coul ? "--coul:" + coul : ""}"><td>${lib}</td>${S.map(s => col[s].n ? cellule(f(col[s])) : "<td>—</td>").join("")}</tr>`;
+  const groupe = (lib, coul) => `<tr class="groupe" style="--coul:${coul}"><td colspan="4">${lib}</td></tr>`;
+  const capT = c => c.cap_dn + c.cap_up, daT = c => c.da_brut - c.turpe_da, enT = c => c.en_net;
+  let h = `<tr><th></th>${S.map(s => `<th style="color:${coulS[s]}">${noms[s]}<br><span style="font-weight:400">${col[s].n} j</span></th>`).join("")}</tr>`;
+  h += groupe("Capacité aFRR : payée pour rester disponible", couleur("--vert"));
+  h += ligne("Réserve à la baisse", c => c.cap_dn);
+  h += ligne("Réserve à la hausse", c => c.cap_up);
+  h += ligne("Sous-total capacité", capT, "sous", couleur("--vert"));
+  h += groupe("Day-ahead : arbitrage sur le marché", couleur("--cyan"));
+  h += ligne("Ventes moins achats", c => c.da_brut);
+  h += ligne("TURPE sur l'électricité échangée", c => -c.turpe_da);
+  h += ligne("Sous-total day-ahead", daT, "sous", couleur("--cyan"));
+  h += groupe("Énergie aFRR : activations réelles de RTE, estimées", couleur("--violet"));
+  h += ligne("Énergie livrée à la hausse (payée)", c => c.en_up);
+  h += ligne("Énergie absorbée à la baisse (payée par nous si prix positif)", c => -c.en_dn);
+  h += ligne("TURPE sur l'énergie absorbée", c => -c.en_turpe);
+  h += ligne("Écart de charge en fin de journée, valorisé au DA", c => c.en_ecart);
+  h += ligne("Sous-total énergie", enT, "sous", couleur("--violet"));
+  h += ligne("Total", c => capT(c) + daT(c) + enT(c), "total");
+  tab.innerHTML = h;
+  const notes = [];
+  if(jours.length > 1) notes.push(`total sur ${jours.length} jours sélectionnés`);
+  for(const s of S){ const c = col[s];
+    if(c.n && c.avecEnergie < c.n) notes.push(`${noms[s]} : énergie pas encore estimée sur ${c.n - c.avecEnergie} j`);
+    if(c.partiels) notes.push(`${noms[s]} : énergie provisoire sur ${c.partiels} j`); }
+  if(scAgent && scAgent !== cle) notes.push(`agent calculé en raccordement ${scAgent}`);
+  if(!col.agent.n) notes.push("agent : décomposition pas encore calculée pour la sélection (elle l'est à chaque passage du robot)");
+  txt("decomp-note", notes.join(" · "));
+  grapheDecomp = new Chart(document.getElementById("g-decomp"), {type:"bar",
+    data:{labels: S.map(s => noms[s]), datasets:[
+      {label:"Capacité aFRR", data: S.map(s => col[s].n ? capT(col[s]) : null), backgroundColor: couleur("--vert")},
+      {label:"Day-ahead net de TURPE", data: S.map(s => col[s].n ? daT(col[s]) : null), backgroundColor: couleur("--cyan")},
+      {label:"Énergie aFRR", data: S.map(s => col[s].n ? enT(col[s]) : null), backgroundColor: couleur("--violet")}]},
+    options:{indexAxis:"y", responsive:true, maintainAspectRatio:false, plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${fmt(c.parsed.x,0)} €/MW`}}},
+      scales:{x:{...grille, stacked:true, title:{display:true, text:"€/MW"}}, y:{...grille, stacked:true}}}});
+}
+
 // ----- export CSV de la sélection (généré dans le navigateur à partir des fichiers publiés)
 const csvNombre = v => defini(v) && v !== "" && !isNaN(v) ? String(Math.round(Number(v) * 1000) / 1000).replace(".", ",") : "";
 const csvTexte = v => { const s = defini(v) ? String(v) : ""; return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
@@ -1029,6 +1117,8 @@ async function exporterJours(){
   const tete = ["jour", "scenario_turpe", "da_moyen_eur_mwh", "da_min_eur_mwh", "da_max_eur_mwh", "afrr_cap_hausse_moyen_eur_mw_h", "afrr_cap_baisse_moyen_eur_mw_h"];
   for(const s of STRATS) tete.push(`${s}_capacite_da_eur_mw`, `${s}_energie_eur_mw`, `${s}_total_eur_mw`, `${s}_cycles`);
   tete.push("agent_regle", "agent_decision", "agent_attendu_eur_mw", "agent_capacite_da_eur_mw", "agent_total_eur_mw", "agent_cycles", "meilleure_regle_a_posteriori_eur_mw");
+  const DEC = ["cap_baisse", "cap_hausse", "da_ventes_moins_achats", "da_turpe", "energie_hausse", "energie_baisse", "energie_turpe", "energie_ecart_soc"];
+  for(const s of ["realiste", "agent", "optimum"]) tete.push(...DEC.map(k => `${s}_${k}_eur_mw`));
   const lignes = [tete];
   for(const j of jours){
     const [r, da, cap, dec] = await Promise.all([lire(`data/resultats/${j}.json`), lire(`data/da/${j}.json`), lire(`data/afrr_capacite/${j}.json`), lire(`data/agent/decisions/${j}.json`)]);
@@ -1045,6 +1135,17 @@ async function exporterJours(){
     l.push(csvTexte(dec ? dec.regle.texte : ""), csvTexte(dec ? (dec.reconstitue ? "reconstituée" : dec.fige ? "figée " + fmtHeure(dec.limite_decision) : "provisoire") : ""),
       csvNombre(dec && dec.attendu.moyenne), csvNombre(rz && rz.capacite_da), csvNombre(rz && rz.total),
       csvNombre(dec && dec.ex_post && defini(dec.ex_post.cycles_reels) ? dec.ex_post.cycles_reels : dec && dec.cycles_plan), csvNombre(rz && rz.meilleure_regle_a_posteriori));
+    // décomposition, €/MW (énergie : revenu à la hausse, coût à la baisse et TURPE en négatif, écart de SoC valorisé)
+    const p = r ? r.puissance_mw : 0.25;
+    for(const s of ["realiste", "agent", "optimum"]){
+      let v = Array(8).fill(null);
+      if(s === "agent"){ const d = dec && dec.decomposition, e = d && d.energie;
+        if(d) v = [d.afrr_baisse, d.afrr_hausse, d.da_brut, -d.turpe_da, e ? e.revenu_hausse : null, e ? -e.cout_baisse : null, e ? -e.turpe : null, e ? e.valeur_ecart_soc : null]; }
+      else { const o = sc && sc[s], xp = sc && sc.ex_post && sc.ex_post[s];
+        if(o && !o.erreur) v = [o.afrr_baisse_eur / p, o.afrr_hausse_eur / p, o.da_brut_eur / p, -o.turpe_eur / p,
+          xp ? xp.revenu_hausse_eur / p : null, xp ? -xp.cout_baisse_eur / p : null, xp ? -xp.turpe_eur / p : null, xp ? xp.valeur_ecart_soc_eur / p : null]; }
+      l.push(...v.map(csvNombre));
+    }
     lignes.push(l);
   }
   telecharger(`bess_par_jour_${jours[0]}_${jours[jours.length-1]}.csv`, lignes);
@@ -1093,7 +1194,7 @@ function rafraichir(){
   txt("sel-resume", !j.length ? "Aucun jour sélectionné" : j.length === 1 ? `Journée ${fmtJour(j[0])}` : `Du ${fmtJour(j[0])} au ${fmtJour(j[j.length-1])}, ${j.length} jours`);
   persoResultat = null; document.getElementById("p-tuiles").hidden = true;
   txt("depot-jour", jourDepot() ? "pour le " + fmtJour(jourDepot()) + (j.length > 1 ? " (dernier jour de la sélection)" : "") : "");
-  chargerDA(); chargerAfrr(); chargerResultats(); chargerAgent();
+  chargerDA(); chargerAfrr(); chargerResultats(); chargerAgent(); chargerDecomp();
 }
 
 (async () => {

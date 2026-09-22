@@ -113,11 +113,15 @@ def resoudre(prep, ru, rd, jour):
     x = res.x; c, d, s0 = x[:n], x[n:2 * n], x[2 * n]
     soc = s0 + np.cumsum(c * ETA * DT - d * DT / ETA)
     prix, turpe, turpe_i = prep["prix"], prep["turpe"], prep["turpe_i"]
-    brut = float(np.sum((d - c) * prix) * DT / 1000) \
-        + float((np.sum(ru * prep["p_up"]) + np.sum(rd * prep["p_dn"])) * prep["ppb"] * DT / 1000)
+    rev_da = float(np.sum((d - c) * prix) * DT / 1000)
+    rev_up = float(np.sum(ru * prep["p_up"]) * prep["ppb"] * DT / 1000)
+    rev_dn = float(np.sum(rd * prep["p_dn"]) * prep["ppb"] * DT / 1000)
+    brut = rev_da + rev_up + rev_dn
     cout_turpe = float((np.sum(c * turpe) + np.sum(d * turpe_i)) * DT / 1000)
     mw = P_KW / 1000
     o = {"net_eur_par_mw": round((brut - cout_turpe) / mw, 1),
+         "decomposition": {"da_brut": round(rev_da / mw, 1), "turpe_da": round(cout_turpe / mw, 1),
+                           "afrr_hausse": round(rev_up / mw, 1), "afrr_baisse": round(rev_dn / mw, 1)},
          "plan": [{"debut": prep["da"][t]["debut"], "soutirage_kw": float(c[t]), "injection_kw": float(d[t]), "soc_kwh": float(soc[t]),
                    "reserve_hausse_kw": float(ru_t[t]), "reserve_baisse_kw": float(rd_t[t]), "prix_da": float(prix[t]),
                    "turpe": float(turpe[t]), "turpe_inj": float(turpe_i[t])} for t in range(n)]}
@@ -140,8 +144,16 @@ def plan_agent(jour: str, dec: dict):
     ex = {k: xr[k] for k in ("active_hausse_kw", "active_baisse_kw", "soc_reel_kwh", "cycles_reels", "complement_net_eur_par_mw",
                              "sans_offre_energie", "partiel") if k in xr} if xr else None
     cycles = sum(p["injection_kw"] for p in o["plan"]) * DT / ETA / (SOC_MAX - SOC_MIN)
+    # décomposition du revenu, €/MW : capacité aFRR, DA, énergie aFRR (mêmes conventions que calcul_revenu.ex_post)
+    mw = P_KW / 1000
+    dcp = dict(o["decomposition"])
+    if xr:
+        dcp["energie"] = {"revenu_hausse": round(xr["revenu_hausse_eur"] / mw, 1), "cout_baisse": round(xr["cout_baisse_eur"] / mw, 1),
+                          "turpe": round(xr["turpe_eur"] / mw, 1), "valeur_ecart_soc": round(xr["valeur_ecart_soc_eur"] / mw, 1),
+                          "net": xr["complement_net_eur_par_mw"], "sans_offre": xr.get("sans_offre_energie", False),
+                          "partiel": xr.get("partiel", False)}
     return {"plan": plan, "ex_post": ex, "cycles_plan": round(cycles, 3), "plan_pas_energie": pas_energie(jour),
-            "plan_regle": dec["regle"]["indice"]}
+            "plan_regle": dec["regle"]["indice"], "decomposition": dcp}
 
 
 def pas_energie(jour: str) -> int:
@@ -322,7 +334,7 @@ def main():
             dec["realise"] = r
         e = ev.get(D.isoformat())
         # plan refait si absent, si de nouvelles activations sont arrivées, ou si la décision provisoire a changé de règle
-        if e and not e.get("absent") and ("plan" not in dec or dec.get("plan_pas_energie") != e.get("pas_energie")
+        if e and not e.get("absent") and ("plan" not in dec or "decomposition" not in dec or dec.get("plan_pas_energie") != e.get("pas_energie")
                                           or dec.get("plan_regle") != dec["regle"]["indice"]):
             try:
                 pl = plan_agent(D.isoformat(), dec)

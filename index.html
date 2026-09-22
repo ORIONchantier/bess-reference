@@ -107,13 +107,17 @@
   .cal-j.borne{background:var(--cyan);color:#0b0e14}
   .sel-resume{font-size:13px;font-weight:700;color:var(--cyan)}
   .replier{margin-left:0;margin-right:10px}
+  .bloc.rubrique{background:transparent;border:1px dashed #2c3a4f;padding:14px 14px 2px}
+  .bloc.rubrique > .bloc-titre h2{color:var(--jaune);font-size:13px}
+  .bloc.rubrique.replie{padding-bottom:14px}
+  .export{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
 </style>
 </head>
 <body>
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.8</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.9</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -134,6 +138,12 @@
           <select id="site-hta" hidden></select>
           <button type="button" class="bouton" id="sites-importer" hidden title="Remplace data/reference/sites.csv par votre fichier">Importer mes sites</button>
           <input type="file" id="sites-fichier" accept=".csv,text/csv" hidden>
+        </span>
+        <span class="export" title="Fichiers CSV de la sélection en cours (séparateur point-virgule, virgule décimale, lisibles par Excel)">
+          <label>Exporter</label>
+          <button type="button" class="bouton" id="csv-jours">⬇ CSV par jour</button>
+          <button type="button" class="bouton" id="csv-quarts">⬇ CSV par quart d'heure</button>
+          <span class="note" id="csv-etat"></span>
         </span>
       </div>
     </div>
@@ -175,14 +185,17 @@
     </div>
   </div>
 
+  <div class="bloc rubrique" id="rub-strategies">
+    <div class="bloc-titre"><h2>Stratégies</h2><span class="note">L'agent décide seul avant 9h en J−1 ; « Ma stratégie » applique tes propres règles.</span></div>
+
   <div class="bloc" id="bloc-agent">
     <div class="bloc-titre"><h2>Agent : règle décidée avant 9h en J−1</h2><span class="note" id="agent-note"></span><span class="unite">€/MW net TURPE, avec énergie</span></div>
     <div class="note" id="agent-demain" style="color:var(--jaune);margin-bottom:6px"></div>
     <div class="note" id="agent-regle" style="margin-bottom:12px"></div>
     <div class="tuiles quatre" style="margin-bottom:0">
       <div class="tuile" style="--coul:#38bdf8"><div class="lib">Agent, réalisé</div><div class="val" id="a-v-agent">—</div><div class="sub" id="a-s-agent"></div></div>
-      <div class="tuile" style="--coul:var(--orange)"><div class="lib">Règle fixe, même méthode</div><div class="val" id="a-v-fixe">—</div><div class="sub" id="a-s-fixe"></div></div>
-      <div class="tuile" style="--coul:#38bdf8"><div class="lib">Agent moins règle fixe</div><div class="val" id="a-v-ecart">—</div><div class="sub" id="a-s-ecart"></div></div>
+      <div class="tuile" style="--coul:var(--cyan)"><div class="lib">Agent moins DA seul</div><div class="val" id="a-v-ecart">—</div><div class="sub" id="a-s-ecart"></div></div>
+      <div class="tuile" style="--coul:var(--violet)"><div class="lib">Part de la meilleure règle a posteriori</div><div class="val" id="a-v-best">—</div><div class="sub" id="a-s-best"></div></div>
       <div class="tuile" style="--coul:var(--texte)"><div class="lib">Part de l'optimum captée</div><div class="val" id="a-v-part">—</div><div class="sub" id="a-s-part"></div></div>
     </div>
     <div class="graphe" id="agent-graphe" style="margin-top:14px" hidden><canvas id="g-agent"></canvas></div>
@@ -223,12 +236,11 @@
     </div>
   </div>
 
-  <div class="bloc" id="bloc-parjour" hidden>
-    <div class="bloc-titre"><h2>Détail par jour, total avec énergie</h2><span class="unite">€/MW/jour</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
-    <div class="graphe"><canvas id="g-parjour"></canvas></div>
   </div>
 
-  <div class="tuiles">
+  <div class="bloc rubrique" id="rub-chiffres">
+    <div class="bloc-titre"><h2>Chiffres clés de la période</h2></div>
+  <div class="tuiles" style="margin-bottom:0">
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, DA seul</div><div class="val" id="t-da">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">TURPE payé, réaliste</div><div class="val" id="t-real">—</div><div class="sub">€/MW/jour sur l'énergie soutirée</div></div>
     <div class="tuile" style="--coul:var(--rouge)"><div class="lib">DA min</div><div class="val" id="k-da-min">—</div><div class="sub">€/MWh</div></div>
@@ -238,6 +250,59 @@
     <div class="tuile" style="--coul:var(--vert)"><div class="lib">aFRR hausse, moyenne</div><div class="val" id="k-afrr-up">—</div><div class="sub">€/MW/h</div></div>
     <div class="tuile" style="--coul:var(--jaune)"><div class="lib">Cycles par jour</div><div class="val" id="k-cycles">—</div><div class="sub" id="ks-cycles">stratégie affichée dans le plan</div></div>
     <div class="tuile" style="--coul:var(--jaune)"><div class="lib">SoC moyen</div><div class="val" id="k-soc">—</div><div class="sub" id="ks-soc">stratégie affichée dans le plan</div></div>
+  </div>
+
+  </div>
+
+  <div class="bloc rubrique" id="rub-courbes">
+    <div class="bloc-titre"><h2>Courbes de référence</h2></div>
+
+  <div class="bloc" id="bloc-parjour" hidden>
+    <div class="bloc-titre"><h2>Détail par jour, total avec énergie</h2><span class="unite">€/MW/jour</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
+    <div class="graphe"><canvas id="g-parjour"></canvas></div>
+  </div>
+
+  <div class="bloc" id="bloc-prix">
+    <div class="bloc-titre"><h2>Prix spot France : day-ahead, enchères intraday, activations aFRR</h2>
+      <span id="ida-cases">
+        <label><input type="checkbox" data-serie="DA" checked> DA</label>
+        <label><input type="checkbox" data-serie="IDA1" disabled> IDA1</label>
+        <label><input type="checkbox" data-serie="IDA2" disabled> IDA2</label>
+        <label><input type="checkbox" data-serie="IDA3" disabled> IDA3</label>
+        <label style="margin-left:10px" title="Prix moyen pondéré des activations aFRR à la hausse, €/MWh"><input type="checkbox" data-serie="AEUP" disabled> aFRR énergie ↑</label>
+        <label title="Prix moyen pondéré des activations aFRR à la baisse, €/MWh"><input type="checkbox" data-serie="AEDN" disabled> aFRR énergie ↓</label>
+        <label style="margin-left:10px" title="Prévisions RTE J-1 : consommation moins solaire moins éolien, MW, axe de droite"><input type="checkbox" data-serie="RESID" disabled> Charge résiduelle prévue J-1</label>
+        <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="CONSO" disabled> Conso prévue J-1</label>
+        <label title="Prévision RTE J-1, publiée vers 16h en J-1, MW, axe de droite"><input type="checkbox" data-serie="SOL" disabled> Solaire prévu J-1</label>
+        <label title="Prévision RTE J-1, publiée vers 16h en J-1, MW, axe de droite"><input type="checkbox" data-serie="EOL" disabled> Éolien prévu J-1</label>
+        <label title="Prévision RTE J-2 de la production sous obligation d'achat EDF (éolien, solaire et autres filières), seule prévision de production disponible avant 9h en J-1, MW, axe de droite"><input type="checkbox" data-serie="OA" disabled> Production OA prévue J-2</label>
+      </span>
+      <span class="note" id="ida-note"></span>
+      <span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
+    <div class="graphe"><canvas id="g-da"></canvas></div><div class="vide" id="vide-da" hidden></div>
+  </div>
+
+  <div class="bloc" id="bloc-afrr">
+    <div class="bloc-titre"><h2>Prix marginal aFRR capacité, appel d'offres journalier</h2><span class="unite">€/MW/h · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
+    <div class="graphe"><canvas id="g-afrr"></canvas></div><div class="vide" id="vide-afrr" hidden></div>
+  </div>
+
+  <div class="bloc plan" id="bloc-plan">
+    <div class="bloc-titre">
+      <h2>Plan de la batterie</h2>
+      <label><input type="radio" name="strat" value="da_seul"> DA seul</label>
+      <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
+      <label><input type="radio" name="strat" value="realiste"> Réaliste</label>
+      <label><input type="radio" name="strat" value="optimum" checked> Optimum</label>
+      <label><input type="radio" name="strat" value="agent"> Agent</label>
+      <label id="lab-perso"><input type="radio" name="strat" value="perso"> Ma stratégie</label>
+      <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (prix d'offre couvrant le coût de remplacement, plafonds SoC et cycles). En multi-jours : moyenne par quart d'heure.</span>
+      <span class="unite">kW et SoC % · pas 15 min</span>
+      <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
+    </div>
+    <div class="graphe"><canvas id="g-plan"></canvas></div><div class="vide" id="vide-plan" hidden></div>
+  </div>
+
   </div>
 
   <div class="bloc" id="bloc-depot">
@@ -273,46 +338,6 @@
       <label><input type="checkbox" id="ida-memoriser" checked> Mémoriser sur cet appareil</label>
       <button class="bouton" id="ida-oublier" type="button">Oublier le jeton</button>
     </details>
-  </div>
-
-  <div class="bloc" id="bloc-prix">
-    <div class="bloc-titre"><h2>Prix spot France : day-ahead, enchères intraday, activations aFRR</h2>
-      <span id="ida-cases">
-        <label><input type="checkbox" data-serie="DA" checked> DA</label>
-        <label><input type="checkbox" data-serie="IDA1" disabled> IDA1</label>
-        <label><input type="checkbox" data-serie="IDA2" disabled> IDA2</label>
-        <label><input type="checkbox" data-serie="IDA3" disabled> IDA3</label>
-        <label style="margin-left:10px" title="Prix moyen pondéré des activations aFRR à la hausse, €/MWh"><input type="checkbox" data-serie="AEUP" disabled> aFRR énergie ↑</label>
-        <label title="Prix moyen pondéré des activations aFRR à la baisse, €/MWh"><input type="checkbox" data-serie="AEDN" disabled> aFRR énergie ↓</label>
-        <label style="margin-left:10px" title="Prévisions RTE J-1 : consommation moins solaire moins éolien, MW, axe de droite"><input type="checkbox" data-serie="RESID" disabled> Charge résiduelle prévue J-1</label>
-        <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="CONSO" disabled> Conso prévue J-1</label>
-        <label title="Prévision RTE J-1, publiée vers 16h en J-1, MW, axe de droite"><input type="checkbox" data-serie="SOL" disabled> Solaire prévu J-1</label>
-        <label title="Prévision RTE J-1, publiée vers 16h en J-1, MW, axe de droite"><input type="checkbox" data-serie="EOL" disabled> Éolien prévu J-1</label>
-        <label title="Prévision RTE J-2 de la production sous obligation d'achat EDF (éolien, solaire et autres filières), seule prévision de production disponible avant 9h en J-1, MW, axe de droite"><input type="checkbox" data-serie="OA" disabled> Production OA prévue J-2</label>
-      </span>
-      <span class="note" id="ida-note"></span>
-      <span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
-    <div class="graphe"><canvas id="g-da"></canvas></div><div class="vide" id="vide-da" hidden></div>
-  </div>
-
-  <div class="bloc" id="bloc-afrr">
-    <div class="bloc-titre"><h2>Prix marginal aFRR capacité, appel d'offres journalier</h2><span class="unite">€/MW/h · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
-    <div class="graphe"><canvas id="g-afrr"></canvas></div><div class="vide" id="vide-afrr" hidden></div>
-  </div>
-
-  <div class="bloc plan" id="bloc-plan">
-    <div class="bloc-titre">
-      <h2>Plan de la batterie</h2>
-      <label><input type="radio" name="strat" value="da_seul"> DA seul</label>
-      <label><input type="radio" name="strat" value="afrr_seul"> aFRR seul</label>
-      <label><input type="radio" name="strat" value="realiste"> Réaliste</label>
-      <label><input type="radio" name="strat" value="optimum" checked> Optimum</label>
-      <label id="lab-perso"><input type="radio" name="strat" value="perso"> Ma stratégie</label>
-      <span class="note">Barres pleines : énergie DA planifiée ; barres violettes et vertes : énergie activée par l'aFRR, estimée (prix d'offre couvrant le coût de remplacement, plafonds SoC et cycles). En multi-jours : moyenne par quart d'heure.</span>
-      <span class="unite">kW et SoC % · pas 15 min</span>
-      <button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button>
-    </div>
-    <div class="graphe"><canvas id="g-plan"></canvas></div><div class="vide" id="vide-plan" hidden></div>
   </div>
 
   <hr class="separateur" data-label="Analyse des activations aFRR énergie, données passées, journalier">
@@ -568,7 +593,7 @@ async function chargerAfrr(){
 
 // ----- résultats : cumul sur la sélection, plan moyen
 let graphePlan = null, grapheParJour = null, resultatsCourants = null;
-const stratLabel = {optimum:"optimum", da_seul:"DA seul", afrr_seul:"aFRR seul", realiste:"réaliste, règle de 9h", perso:"ma stratégie"};
+const stratLabel = {optimum:"optimum", da_seul:"DA seul", afrr_seul:"aFRR seul", realiste:"réaliste, règle de 9h", agent:"agent, règle adaptative", perso:"ma stratégie"};
 const STRATS = ["da_seul", "afrr_seul", "realiste", "optimum"], IDS = {da_seul:"da", afrr_seul:"afrr", realiste:"real", optimum:"opt"};
 async function chargerResultats(){
   const jours = joursSelection(), vide = document.getElementById("vide-plan");
@@ -625,6 +650,8 @@ async function chargerResultats(){
   dessinerPlan();
 }
 
+const versSerie = (plan, xp) => plan.map((p, i) => ({cle: cleQuart(p.debut), soutirage: p.soutirage_kw, injection: p.injection_kw, ru: p.reserve_hausse_kw, rd: p.reserve_baisse_kw, soc: p.soc_kwh, prix: p.prix_da, turpe: p.turpe, turpe_inj: p.turpe_inj || 0,
+  act_up: xp && xp.active_hausse_kw ? xp.active_hausse_kw[i] : 0, act_dn: xp && xp.active_baisse_kw ? xp.active_baisse_kw[i] : 0, soc_reel: xp && xp.soc_reel_kwh ? xp.soc_reel_kwh[i] : null}));
 function dessinerPlan(){
   const vide = document.getElementById("vide-plan");
   if(graphePlan){ graphePlan.destroy(); graphePlan = null; }
@@ -635,20 +662,23 @@ function dessinerPlan(){
     if(!persoResultat){ vide.hidden = false; vide.textContent = "Clique d'abord sur « Calculer ma stratégie »."; return; }
     for(const pl of persoResultat.plans) series.push(pl);
     xps.push(true);
+  } else if(strat === "agent"){
+    // plan de la règle choisie par l'agent, calculé par scripts/regle_adaptative.py (scénario de l'agent)
+    for(const d of agentDecs){ if(!d.plan) continue; series.push(versSerie(d.plan, d.ex_post)); if(d.ex_post) xps.push(d.ex_post); }
   } else
   for(const l of lus){
     const o = l.sc[strat]; if(!o || o.erreur || !o.plan) continue;
     const xp = l.sc.ex_post && l.sc.ex_post[strat];
-    series.push(o.plan.map((p, i) => ({cle: cleQuart(p.debut), soutirage: p.soutirage_kw, injection: p.injection_kw, ru: p.reserve_hausse_kw, rd: p.reserve_baisse_kw, soc: p.soc_kwh, prix: p.prix_da, turpe: p.turpe, turpe_inj: p.turpe_inj || 0,
-      act_up: xp && xp.active_hausse_kw ? xp.active_hausse_kw[i] : 0, act_dn: xp && xp.active_baisse_kw ? xp.active_baisse_kw[i] : 0, soc_reel: xp && xp.soc_reel_kwh ? xp.soc_reel_kwh[i] : null})));
+    series.push(versSerie(o.plan, xp));
     if(xp) xps.push(xp);
   }
-  if(!series.length){ vide.hidden = false; vide.textContent = "Pas de plan disponible pour cette stratégie."; return; }
+  if(!series.length){ vide.hidden = false; vide.textContent = strat === "agent" ? "Pas de plan de l'agent pour la sélection (décision absente, ou day-ahead du jour pas encore publié)." : "Pas de plan disponible pour cette stratégie."; return; }
   vide.hidden = true;
   const m = moyenneParQuart(series), labels = m.map(p => p.cle), avecAct = xps.length > 0;
   // indicateurs de la stratégie affichée : cycles par jour (réels si l'énergie est estimée) et SoC moyen
   let cyclesJ = null;
   if(strat === "perso" && persoResultat){ cyclesJ = moy(persoResultat.plans.map(pl => (pl.reduce((s,q) => s + q.injection, 0) * 0.25 + pl.reduce((s,q) => s + q.act_up, 0) * 0.25) / Math.sqrt(window.cfgBatterie.rendement_aller_retour) / ((window.cfgBatterie.soc_max - window.cfgBatterie.soc_min) * capaciteKwh))); }
+  else if(strat === "agent") cyclesJ = moy(agentDecs.filter(d => d.plan).map(d => d.ex_post && defini(d.ex_post.cycles_reels) ? d.ex_post.cycles_reels : d.cycles_plan).filter(defini));
   else cyclesJ = moy(lus.map(l => { const o = l.sc[strat], xp = l.sc.ex_post && l.sc.ex_post[strat]; return xp ? xp.cycles_reels : (o && !o.erreur ? o.cycles : null); }).filter(v => v !== null));
   const socMoyPlan = moy(m.map(p => p.soc)), socMoyReel = avecAct && m.every(p => p.soc_reel !== undefined && p.soc_reel !== null) ? moy(m.map(p => p.soc_reel)) : null;
   txt("k-cycles", fmt(cyclesJ, 2)); txt("ks-cycles", `${stratLabel[strat]}${n > 1 ? ", moyenne sur " + series.length + " jours" : ""}${avecAct && strat !== "perso" ? ", activations comprises" : ""}`);
@@ -911,14 +941,15 @@ async function calculerPerso(){
 document.getElementById("p-calculer").addEventListener("click", calculerPerso);
 
 // ----- agent, règle adaptative (scripts/regle_adaptative.py)
-let grapheAgent = null;
+let grapheAgent = null, agentDecs = [];
 const fmtHeure = iso => iso ? new Date(iso).toLocaleString("fr-FR", {timeZone:"Europe/Paris", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "";
 const signe = v => (v >= 0 ? "+" : "") + fmt(v, 0);
+const defini = v => v !== null && v !== undefined;
 async function chargerAgent(){
   const jours = joursSelection(), boite = document.getElementById("agent-graphe");
   if(grapheAgent){ grapheAgent.destroy(); grapheAgent = null; }
-  boite.hidden = true;
-  for(const s of ["agent","fixe","ecart","part"]){ txt("a-v-" + s, "—"); txt("a-s-" + s, ""); }
+  boite.hidden = true; agentDecs = [];
+  for(const s of ["agent","ecart","best","part"]){ txt("a-v-" + s, "—"); txt("a-s-" + s, ""); }
   txt("agent-regle", ""); txt("agent-note", "");
   const ia = await lire("data/agent/index.json");
   if(!ia || !ia.decisions || !ia.decisions.length){ txt("agent-demain", "Agent pas encore calculé : lancer le workflow « Agent, rattrapage historique » sur GitHub, puis attendre la collecte suivante."); return; }
@@ -929,44 +960,120 @@ async function chargerAgent(){
   if(derJ !== dem){
     txt("agent-demain", `Pas de décision pour demain ${fmtJour(dem)}. Dernière décision : ${fmtJour(derJ)}. L'agent attend que les 30 jours de sa fenêtre soient évalués ` +
       `(${ia.evaluees_completes ?? "?"} journées complètes évaluées${ia.blocage ? " ; " + ia.blocage : ""}).`);
-  } else if(der) txt("agent-demain", `Décision pour demain ${fmtJour(derJ)} (${der.fige ? (der.reconstitue ? "reconstituée" : "figée à " + fmtHeure(der.limite_decision)) : "provisoire, figée à " + fmtHeure(der.limite_decision)}) : ${der.regle.texte}. Attendu ${fmt(der.attendu.moyenne,0)} €/MW/j (p10 ${fmt(der.attendu.p10,0)}, p90 ${fmt(der.attendu.p90,0)}) sur ${der.fenetre.nb_jours} jours du ${fmtJour(der.fenetre.du)} au ${fmtJour(der.fenetre.au)}` + (der.regle_fixe_attendu ? `, contre ${fmt(der.regle_fixe_attendu.moyenne,0)} pour la règle fixe.` : "."));
+  } else if(der) txt("agent-demain", `Décision pour demain ${fmtJour(derJ)} (${der.fige ? (der.reconstitue ? "reconstituée" : "figée à " + fmtHeure(der.limite_decision)) : "provisoire, figée à " + fmtHeure(der.limite_decision)}) : ${der.regle.texte}. Attendu ${fmt(der.attendu.moyenne,0)} €/MW/j (p10 ${fmt(der.attendu.p10,0)}, p90 ${fmt(der.attendu.p90,0)}) sur ${der.fenetre.nb_jours} jours du ${fmtJour(der.fenetre.du)} au ${fmtJour(der.fenetre.au)}.`);
   if(cleScenario() !== ia.scenario) txt("agent-note", `calculé en raccordement ${ia.scenario}, pas pour le raccordement affiché`);
-  const decs = [];
-  for(const j of jours){ const d = await lire(`data/agent/decisions/${j}.json`); if(d) decs.push(d); }
+  for(const j of jours){ const d = await lire(`data/agent/decisions/${j}.json`); if(d) agentDecs.push(d); }
+  const decs = agentDecs;
+  if(document.querySelector('input[name="strat"]:checked').value === "agent") dessinerPlan();
   if(!decs.length){ txt("agent-regle", "Pas de décision de l'agent pour la sélection (il lui faut 30 jours d'historique évalués avant le jour choisi)."); return; }
-  const faits = decs.filter(d => d.realise && d.realise.total !== null && d.realise.total !== undefined && d.realise.regle_fixe !== null && d.realise.regle_fixe !== undefined);
+  const faits = decs.filter(d => d.realise && defini(d.realise.total));
   const unique = jours.length === 1, d0 = decs[0];
   if(unique) txt("agent-regle", `Règle retenue ${d0.reconstitue ? "(décision reconstituée, jour antérieur à la mise en service)" : "le " + fmtHeure(d0.calcule_le) + (d0.fige ? ", figée" : ", provisoire")} : ${d0.regle.texte}. Choisie sur ${d0.fenetre.nb_jours} jours du ${fmtJour(d0.fenetre.du)} au ${fmtJour(d0.fenetre.au)} : moyenne ${fmt(d0.attendu.moyenne,0)} €/MW/j, écart-type ${fmt(d0.attendu.ecart_type,0)}, score ${fmt(d0.attendu.score,0)}.`);
   else { const freq = new Map(); for(const d of decs) freq.set(d.regle.texte, (freq.get(d.regle.texte) || 0) + 1);
     const top = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
-    txt("agent-regle", `${decs.length} décisions sur la sélection, ${freq.size} règles différentes. Les plus fréquentes : ` + top.map(([t, k]) => `${t} (${k} j)`).join(" · ")); }
+    txt("agent-regle", `${decs.length} décisions sur la sélection, ${freq.size} règle${freq.size > 1 ? "s" : ""} différente${freq.size > 1 ? "s" : ""}. Les plus fréquentes : ` + top.map(([t, k]) => `${t} (${k} j)`).join(" · ")); }
   if(!faits.length){ txt("a-s-agent", unique ? "journée pas encore livrée ou activations incomplètes" : "aucune journée évaluée"); return; }
-  const n = faits.length, S = f => faits.reduce((a, d) => a + (Number(f(d.realise)) || 0), 0);
-  const ag = S(r => r.total), fx = S(r => r.regle_fixe), dz = S(r => r.da_seul);
-  const avecOpt = faits.filter(d => d.realise.optimum !== null && d.realise.optimum !== undefined);
-  const agO = avecOpt.reduce((a, d) => a + d.realise.total, 0), op = avecOpt.reduce((a, d) => a + d.realise.optimum, 0);
-  const best = S(r => r.meilleure_regle_a_posteriori), parJ = v => unique ? "" : ` (${fmt(v / n, 0)}/j)`;
+  const n = faits.length, S = (liste, f) => liste.reduce((a, d) => a + (Number(f(d.realise)) || 0), 0), parJ = v => unique ? "" : ` (${fmt(v / n, 0)}/j)`;
+  const ag = S(faits, r => r.total);
+  const avecDa = faits.filter(d => defini(d.realise.da_seul)), agD = S(avecDa, r => r.total), dz = S(avecDa, r => r.da_seul);
+  const avecBest = faits.filter(d => defini(d.realise.meilleure_regle_a_posteriori)), agB = S(avecBest, r => r.total), best = S(avecBest, r => r.meilleure_regle_a_posteriori);
+  const avecOpt = faits.filter(d => defini(d.realise.optimum)), agO = S(avecOpt, r => r.total), op = S(avecOpt, r => r.optimum);
   txt("a-v-agent", fmt(ag, 0));
   txt("a-s-agent", unique ? `capacité + DA ${fmt(faits[0].realise.capacite_da,0)}, énergie ${signe(faits[0].realise.total - faits[0].realise.capacite_da)} · attendu ${fmt(faits[0].attendu.moyenne,0)} (p10 ${fmt(faits[0].attendu.p10,0)}, p90 ${fmt(faits[0].attendu.p90,0)})`
     : `€/MW sur ${n} jours évalués${parJ(ag)}${decs.length > n ? ", " + (decs.length - n) + " jours pas encore complets exclus" : ""}`);
-  txt("a-v-fixe", fmt(fx, 0));
-  txt("a-s-fixe", `règle de config/parametres.json rejouée par l'agent${parJ(fx)} · DA seul ${fmt(dz,0)}`);
-  txt("a-v-ecart", signe(ag - fx));
-  txt("a-s-ecart", `€/MW${parJ(ag - fx)} · ${faits.filter(d => d.realise.total > d.realise.regle_fixe).length} jours gagnés, ${faits.filter(d => d.realise.total < d.realise.regle_fixe).length} perdus sur ${n}`);
+  txt("a-v-ecart", avecDa.length ? signe(agD - dz) : "—");
+  txt("a-s-ecart", `€/MW${parJ(agD - dz)} · DA seul ${fmt(dz,0)} €/MW · ${avecDa.filter(d => d.realise.total > d.realise.da_seul).length} jours au-dessus, ${avecDa.filter(d => d.realise.total < d.realise.da_seul).length} en dessous sur ${avecDa.length}`);
+  txt("a-v-best", best > 0 ? fmt(100 * agB / best, 0) + " %" : "—");
+  txt("a-s-best", `meilleure règle de la grille choisie après coup, jour par jour : ${fmt(best,0)} €/MW sur ${avecBest.length} j. C'est le plafond de l'agent.`);
   txt("a-v-part", op > 0 ? fmt(100 * agO / op, 0) + " %" : "—");
-  txt("a-s-part", `optimum + énergie ${fmt(op,0)} €/MW sur ${avecOpt.length} j · meilleure règle de la grille a posteriori ${fmt(best,0)} €/MW (${fmt(best > 0 ? 100 * ag / best : NaN,0)} % captés)`);
+  txt("a-s-part", `optimum + énergie ${fmt(op,0)} €/MW sur ${avecOpt.length} j (information parfaite, DA et réserves choisis ensemble)`);
   if(!unique){
     boite.hidden = false;
-    const cumul = f => { let s = 0; return faits.map(d => { const v = f(d.realise); s += (v === null || v === undefined) ? 0 : v; return s; }); };
+    const cumul = f => { let s = 0; return faits.map(d => { const v = f(d.realise); s += defini(v) ? v : 0; return s; }); };
     grapheAgent = new Chart(document.getElementById("g-agent"), {type:"line", data:{labels: faits.map(d => fmtJour(d.jour)), datasets:[
       {label:"Agent", data: cumul(r => r.total), borderColor:"#38bdf8", borderWidth:2, pointRadius:0},
-      {label:"Règle fixe", data: cumul(r => r.regle_fixe), borderColor:couleur("--orange"), borderWidth:1.5, pointRadius:0},
       {label:"DA seul", data: cumul(r => r.da_seul), borderColor:couleur("--cyan"), borderWidth:1, borderDash:[4,3], pointRadius:0},
       {label:"Meilleure règle a posteriori", data: cumul(r => r.meilleure_regle_a_posteriori), borderColor:couleur("--violet"), borderWidth:1, borderDash:[2,2], pointRadius:0},
       {label:"Optimum + énergie", data: cumul(r => r.optimum), borderColor:"#c9d1d9", borderWidth:1, pointRadius:0}]},
       options: opts("€/MW cumulés", {plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label: c => `${c.dataset.label} : ${fmt(c.parsed.y,0)} €/MW`}}}})});
   }
 }
+// ----- export CSV de la sélection (généré dans le navigateur à partir des fichiers publiés)
+const csvNombre = v => defini(v) && v !== "" && !isNaN(v) ? String(Math.round(Number(v) * 1000) / 1000).replace(".", ",") : "";
+const csvTexte = v => { const s = defini(v) ? String(v) : ""; return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+const estHausse = s => /UP/i.test(s) && !/DOWN/i.test(s), estBaisse = s => /DOWN/i.test(s);
+const capJournalier = cap => { const d = (cap || []).filter(p => String(p.horizon ?? "DAILY").toUpperCase() === "DAILY"); return d.length ? d : (cap || []); };
+function telecharger(nom, lignes){
+  const contenu = "﻿" + lignes.map(l => l.join(";")).join("\r\n");      // BOM : Excel lit l'UTF-8
+  const url = URL.createObjectURL(new Blob([contenu], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a"); a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+async function exporterJours(){
+  const jours = joursSelection(); if(!jours.length){ txt("csv-etat", "aucun jour sélectionné"); return; }
+  txt("csv-etat", "préparation…");
+  const cle = cleScenario();
+  const tete = ["jour", "scenario_turpe", "da_moyen_eur_mwh", "da_min_eur_mwh", "da_max_eur_mwh", "afrr_cap_hausse_moyen_eur_mw_h", "afrr_cap_baisse_moyen_eur_mw_h"];
+  for(const s of STRATS) tete.push(`${s}_capacite_da_eur_mw`, `${s}_energie_eur_mw`, `${s}_total_eur_mw`, `${s}_cycles`);
+  tete.push("agent_regle", "agent_decision", "agent_attendu_eur_mw", "agent_capacite_da_eur_mw", "agent_total_eur_mw", "agent_cycles", "meilleure_regle_a_posteriori_eur_mw");
+  const lignes = [tete];
+  for(const j of jours){
+    const [r, da, cap, dec] = await Promise.all([lire(`data/resultats/${j}.json`), lire(`data/da/${j}.json`), lire(`data/afrr_capacite/${j}.json`), lire(`data/agent/decisions/${j}.json`)]);
+    const prix = (da || []).map(p => Number(p.prix)), cj = capJournalier(cap);
+    const moyCap = f => moy(cj.filter(p => f(p.sens)).map(p => Number(p.prix_eur_mw_15min ?? p.prix_eur_mw_h)));
+    const sc = r && r.scenarios ? (r.scenarios[cle] || r.scenarios.BT) : null;
+    const l = [j, cle, csvNombre(moy(prix)), csvNombre(prix.length ? Math.min(...prix) : null), csvNombre(prix.length ? Math.max(...prix) : null), csvNombre(moyCap(estHausse)), csvNombre(moyCap(estBaisse))];
+    for(const s of STRATS){
+      const o = sc && sc[s], xp = sc && sc.ex_post && sc.ex_post[s];
+      const c = o && !o.erreur ? o.net_eur_par_mw : null, e = xp ? xp.complement_net_eur_par_mw : (s === "da_seul" ? 0 : null);
+      l.push(csvNombre(c), csvNombre(e), csvNombre(defini(c) && defini(e) ? c + e : null), csvNombre(xp ? xp.cycles_reels : (o && !o.erreur ? o.cycles : null)));
+    }
+    const rz = dec && dec.realise;
+    l.push(csvTexte(dec ? dec.regle.texte : ""), csvTexte(dec ? (dec.reconstitue ? "reconstituée" : dec.fige ? "figée " + fmtHeure(dec.limite_decision) : "provisoire") : ""),
+      csvNombre(dec && dec.attendu.moyenne), csvNombre(rz && rz.capacite_da), csvNombre(rz && rz.total),
+      csvNombre(dec && dec.ex_post && defini(dec.ex_post.cycles_reels) ? dec.ex_post.cycles_reels : dec && dec.cycles_plan), csvNombre(rz && rz.meilleure_regle_a_posteriori));
+    lignes.push(l);
+  }
+  telecharger(`bess_par_jour_${jours[0]}_${jours[jours.length-1]}.csv`, lignes);
+  txt("csv-etat", `${jours.length} jour${jours.length > 1 ? "s" : ""} exporté${jours.length > 1 ? "s" : ""}`);
+}
+async function exporterQuarts(){
+  const jours = joursSelection(); if(!jours.length){ txt("csv-etat", "aucun jour sélectionné"); return; }
+  let strat = document.querySelector('input[name="strat"]:checked').value; if(strat === "perso") strat = null;
+  txt("csv-etat", "préparation…");
+  const cle = cleScenario(), t = iso => new Date(iso).getTime();
+  const tete = ["jour", "debut", "heure_paris", "prix_da_eur_mwh", "afrr_cap_hausse_eur_mw_h", "afrr_cap_baisse_eur_mw_h", "afrr_besoin_hausse_mw", "afrr_besoin_baisse_mw",
+    "afrr_active_hausse_mw", "afrr_active_baisse_mw", "afrr_prix_hausse_eur_mwh", "afrr_prix_baisse_eur_mwh", "conso_prevue_j1_mw", "solaire_prevu_j1_mw", "eolien_prevu_j1_mw",
+    "charge_residuelle_prevue_j1_mw", "production_oa_prevue_j2_mw"];
+  if(strat) tete.push(...["soutirage_kw", "injection_kw", "reserve_hausse_kw", "reserve_baisse_kw", "soc_kwh", "activation_hausse_kw", "activation_baisse_kw"].map(c => `${strat}_${c}`));
+  const lignes = [tete];
+  for(const j of jours){
+    const [da, cap, en, pv, r, dec] = await Promise.all([lire(`data/da/${j}.json`), lire(`data/afrr_capacite/${j}.json`), lire(`data/afrr_energie/${j}.json`),
+      lire(`data/previsions/${j}.json`), lire(`data/resultats/${j}.json`), lire(`data/agent/decisions/${j}.json`)]);
+    if(!da) continue;
+    const mCap = new Map();
+    for(const p of capJournalier(cap)){ const k = t(p.debut), o = mCap.get(k) || {}, v = Number(p.prix_eur_mw_15min ?? p.prix_eur_mw_h); if(estHausse(p.sens)) o.up = v; else if(estBaisse(p.sens)) o.dn = v; mCap.set(k, o); }
+    const mEn = new Map((en || []).map(p => [t(p.debut), p])), mPv = new Map((pv || []).map(p => [t(p.debut), p]));
+    let plan = null, xp = null;
+    if(strat === "agent"){ plan = dec && dec.plan; xp = dec && dec.ex_post; }
+    else if(strat){ const sc = r && r.scenarios ? (r.scenarios[cle] || r.scenarios.BT) : null, o = sc && sc[strat]; plan = o && !o.erreur ? o.plan : null; xp = sc && sc.ex_post && sc.ex_post[strat]; }
+    const mPlan = new Map((plan || []).map((p, i) => [t(p.debut), {p, i}])), vus = new Set();
+    for(const d of [...da].sort((a, b) => t(a.debut) - t(b.debut))){
+      const k = t(d.debut); if(vus.has(k)) continue; vus.add(k);
+      const c = mCap.get(k) || {}, e = mEn.get(k) || {}, v = mPv.get(k) || {}, q = mPlan.get(k);
+      const l = [j, d.debut, heureParis(d.debut), csvNombre(d.prix), csvNombre(c.up), csvNombre(c.dn), csvNombre(e.besoin_hausse_mw), csvNombre(e.besoin_baisse_mw),
+        csvNombre(e.active_hausse_mw), csvNombre(e.active_baisse_mw), csvNombre(e.prix_hausse_eur_mwh), csvNombre(e.prix_baisse_eur_mwh), csvNombre(v.consommation_mw),
+        csvNombre(v.solaire_mw), csvNombre(v.eolien_mw), csvNombre(v.charge_residuelle_mw), csvNombre(v.oa_j2_mw)];
+      if(strat) l.push(...(q ? [q.p.soutirage_kw, q.p.injection_kw, q.p.reserve_hausse_kw, q.p.reserve_baisse_kw, q.p.soc_kwh,
+        xp && xp.active_hausse_kw ? xp.active_hausse_kw[q.i] : null, xp && xp.active_baisse_kw ? xp.active_baisse_kw[q.i] : null] : Array(7).fill(null)).map(csvNombre));
+      lignes.push(l);
+    }
+  }
+  telecharger(`bess_quarts_${jours[0]}_${jours[jours.length-1]}${strat ? "_" + strat : ""}.csv`, lignes);
+  txt("csv-etat", `${lignes.length - 1} quarts d'heure exportés` + (strat ? `, plan : ${stratLabel[strat]} (choisi dans « Plan de la batterie »)` : ", sans plan (« Ma stratégie » n'est pas exportée)"));
+}
+document.getElementById("csv-jours").addEventListener("click", () => exporterJours().catch(e => txt("csv-etat", "échec : " + e.message)));
+document.getElementById("csv-quarts").addEventListener("click", () => exporterQuarts().catch(e => txt("csv-etat", "échec : " + e.message)));
 
 function rafraichir(){
   const j = joursSelection();

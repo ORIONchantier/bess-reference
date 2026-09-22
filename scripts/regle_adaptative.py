@@ -122,8 +122,26 @@ def resoudre(prep, ru, rd, jour):
                    "reserve_hausse_kw": float(ru_t[t]), "reserve_baisse_kw": float(rd_t[t]), "prix_da": float(prix[t]),
                    "turpe": float(turpe[t]), "turpe_inj": float(turpe_i[t])} for t in range(n)]}
     xp = CR.ex_post(jour, {"realiste": o})
-    en = xp["realiste"]["complement_net_eur_par_mw"] if xp and "realiste" in xp else None
-    return o["net_eur_par_mw"], en
+    xr = xp["realiste"] if xp and "realiste" in xp else None
+    return o["net_eur_par_mw"], (xr["complement_net_eur_par_mw"] if xr else None), o, xr
+
+
+def plan_agent(jour: str, dec: dict):
+    """Plan de la batterie avec la règle choisie par l'agent (même format que les plans de calcul_revenu), pour la page."""
+    prep = preparer(jour)
+    if prep is None:
+        return None
+    ru, rd = reserves(prep, REGLES[dec["regle"]["indice"]])
+    v = resoudre(prep, ru, rd, jour)
+    if not v:
+        return None
+    _, _, o, xr = v
+    plan = [{k: (p[k] if k == "debut" else round(p[k], 1)) for k in p} for p in o["plan"]]
+    ex = {k: xr[k] for k in ("active_hausse_kw", "active_baisse_kw", "soc_reel_kwh", "cycles_reels", "complement_net_eur_par_mw",
+                             "sans_offre_energie", "partiel") if k in xr} if xr else None
+    cycles = sum(p["injection_kw"] for p in o["plan"]) * DT / ETA / (SOC_MAX - SOC_MIN)
+    return {"plan": plan, "ex_post": ex, "cycles_plan": round(cycles, 3), "plan_pas_energie": pas_energie(jour),
+            "plan_regle": dec["regle"]["indice"]}
 
 
 def pas_energie(jour: str) -> int:
@@ -297,6 +315,16 @@ def main():
         r = realise(dec, ev)
         if r is not None:
             dec["realise"] = r
+        e = ev.get(D.isoformat())
+        # plan refait si absent, si de nouvelles activations sont arrivées, ou si la décision provisoire a changé de règle
+        if e and not e.get("absent") and ("plan" not in dec or dec.get("plan_pas_energie") != e.get("pas_energie")
+                                          or dec.get("plan_regle") != dec["regle"]["indice"]):
+            try:
+                pl = plan_agent(D.isoformat(), dec)
+                if pl:
+                    dec.update(pl)
+            except Exception as err:
+                print(f"agent plan {D} : échec, {type(err).__name__}: {err}")
         p.write_text(json.dumps(dec, ensure_ascii=False))
     decisions = sorted(p.stem for p in (DOSSIER / "decisions").glob("????-??-??.json"))
     # pourquoi pas de décision pour demain, le cas échéant (affiché sur la page)

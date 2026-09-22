@@ -27,7 +27,7 @@ CYCLES = B["cycles_max_par_jour"]
 K = B.get("facteur_marge_afrr_k", 1.0)
 BLOC = CFG.get("afrr", {}).get("bloc_reservation_min", 60)
 DT = 0.25                                                               # h par pas
-VERSION = 11                                                             # incrémenter force le recalcul des jours anciens
+VERSION = 12                                                            # incrémenter force le recalcul des jours anciens
 
 
 def instant(iso: str) -> int:
@@ -38,9 +38,24 @@ def instant(iso: str) -> int:
 TARIF = turpe_mod.TarifBT()          # remplacé par calculer() pour chaque scénario de raccordement
 
 
+def dedoublonner_da(jour: str):
+    """ENTSO-E renvoie parfois deux séries identiques pour la même journée (constaté du 08/08 au 17/09/2026 : 192 pas
+    au lieu de 96). Un pas en double compterait deux fois dans l'optimisation. On garde un point par instant et on
+    réécrit le fichier."""
+    path = DATA / "da" / f"{jour}.json"
+    da = json.loads(path.read_text())
+    uniques = {}
+    for p in da:
+        uniques.setdefault(instant(p["debut"]), p)
+    if len(uniques) != len(da):
+        print(f"{jour} : DA, {len(da) - len(uniques)} pas en double supprimés ({len(da)} -> {len(uniques)})")
+        da = [uniques[k] for k in sorted(uniques)]
+        path.write_text(json.dumps(da, ensure_ascii=False))
+    return sorted(da, key=lambda p: instant(p["debut"]))
+
+
 def charger_jour(jour: str):
-    da = json.loads((DATA / "da" / f"{jour}.json").read_text())
-    da = sorted(da, key=lambda p: p["debut"])
+    da = dedoublonner_da(jour)
     cap_path = DATA / "afrr_capacite" / f"{jour}.json"
     cap = json.loads(cap_path.read_text()) if cap_path.exists() else []
     cap = [c for c in cap if str(c.get("horizon", "DAILY")).upper() == "DAILY"] or cap

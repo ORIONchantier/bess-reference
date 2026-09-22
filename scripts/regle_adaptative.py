@@ -299,7 +299,17 @@ def main():
             dec["realise"] = r
         p.write_text(json.dumps(dec, ensure_ascii=False))
     decisions = sorted(p.stem for p in (DOSSIER / "decisions").glob("????-??-??.json"))
-    (DOSSIER / "index.json").write_text(json.dumps({"decisions": decisions, "signature": SIGNATURE,
+    # pourquoi pas de décision pour demain, le cas échéant (affiché sur la page)
+    blocage = None
+    if not (DOSSIER / "decisions" / f"{demain.isoformat()}.json").exists():
+        cand = [j for j in jours if j <= (demain - dt.timedelta(days=2)).isoformat()][-A.get("fenetre_jours", 30):]
+        non_eval = [j for j in cand if j not in ev]
+        incomplets = [j for j in cand if j in ev and not ev[j]["complet"]]
+        blocage = (f"fenêtre du {cand[0]} au {cand[-1]} : {len(non_eval)} jours pas encore évalués, "
+                   f"{len(incomplets)} jours aux activations incomplètes" + (f" (dont {', '.join(incomplets[:3])}…)" if incomplets else "")) if cand else "historique insuffisant"
+        print(f"agent : pas de décision pour {demain}, {blocage}")
+    (DOSSIER / "index.json").write_text(json.dumps({"decisions": decisions, "signature": SIGNATURE, "blocage": blocage,
+        "evaluees": len(ev), "evaluees_completes": sum(1 for e in ev.values() if e["complet"]),
         "nb_regles": len(REGLES), "fenetre_jours": A.get("fenetre_jours", 30), "lambda": A.get("lambda_ecart_type", 0.5),
         "scenario": A.get("scenario", "BT"), "mis_a_jour": maintenant.isoformat(timespec="minutes")}, ensure_ascii=False))
     dd = DOSSIER / "decisions" / f"{demain.isoformat()}.json"

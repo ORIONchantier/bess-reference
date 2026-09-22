@@ -47,6 +47,7 @@ def entsoe_da(du: dt.date, au: dt.date, token: str) -> dict:
         for ts in root.findall("n:TimeSeries", ns):
             for per in ts.findall("n:Period", ns):
                 start = dt.datetime.fromisoformat(per.find("n:timeInterval/n:start", ns).text.replace("Z", "+00:00"))
+                end = dt.datetime.fromisoformat(per.find("n:timeInterval/n:end", ns).text.replace("Z", "+00:00"))
                 res = per.find("n:resolution", ns).text
                 pas = 60 if res == "PT60M" else 15 if res == "PT15M" else 30 if res == "PT30M" else None
                 if pas is None:
@@ -55,7 +56,9 @@ def entsoe_da(du: dt.date, au: dt.date, token: str) -> dict:
                 for p in per.findall("n:Point", ns):
                     pos = int(p.find("n:position", ns).text); prix = float(p.find("n:price.amount", ns).text)
                     pts[pos] = prix
-                nb = max(pts) if pts else 0
+                # le nombre de positions vient de l'intervalle, pas du dernier point publié : les dernières positions
+                # omises reprennent le prix précédent (constaté : 2025-09-30 et 2025-12-24 tronqués)
+                nb = int((end - start).total_seconds() // (pas * 60)) if pts else 0
                 dernier = None
                 for pos in range(1, nb + 1):
                     prix = pts.get(pos, dernier)          # positions manquantes = prix inchangé (règle ENTSO-E)
@@ -133,7 +136,11 @@ def main():
                 n = 0
                 for jj, l in res.items():
                     if du <= dt.date.fromisoformat(jj) <= au and (force or not existe("da", dt.date.fromisoformat(jj))):
-                        l = sorted(l, key=lambda p: p["debut"])
+                        # plusieurs TimeSeries peuvent couvrir la même journée : un point par instant
+                        uniques = {}
+                        for p in l:
+                            uniques.setdefault(dt.datetime.fromisoformat(p["debut"]).timestamp(), p)
+                        l = [uniques[k] for k in sorted(uniques)]
                         if len(l) >= 92:                                   # journée complète (92 pas le jour du passage à l'heure d'été)
                             (DATA / "da").mkdir(exist_ok=True); (DATA / "da" / f"{jj}.json").write_text(json.dumps(l, ensure_ascii=False)); n += 1
                 print(f"DA ENTSO-E : {n} jours écrits")

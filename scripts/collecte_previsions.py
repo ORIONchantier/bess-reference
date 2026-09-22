@@ -56,7 +56,8 @@ def quarts(pts):
     """Étale au pas 15 min (une valeur horaire est répétée sur ses quatre quarts d'heure). Calcul en UTC pour les
     jours de changement d'heure. Clé : début du quart d'heure en heure de Paris (ISO)."""
     res = {}
-    for p in pts:
+    # versions successives d'une même échéance (sous-types DA01 puis DA02 de l'agrégat OA) : la plus récente l'emporte
+    for p in sorted(pts, key=lambda p: lire_iso(p["maj"]) if p.get("maj") else dt.datetime.min.replace(tzinfo=UTC)):
         d0 = lire_iso(p["debut"]).astimezone(UTC)
         d1 = lire_iso(p["fin"]).astimezone(UTC) if p.get("fin") else d0 + dt.timedelta(minutes=15)
         t = d0
@@ -119,8 +120,10 @@ def collecter(token, jour: dt.date, save_raw=True):
         valeurs, m = serie(pts[spec["ressource"]], spec) if spec["ressource"] in pts else ({}, None)
         if m is not None:
             m["avant_limite"] = (lire_iso(m["maj_max"]) <= limite) if m["maj_max"] else None      # None : pas de date publiée
-            if m["avant_limite"] is None and spec.get("figer_avant_limite"):
+            if m["avant_limite"] is None and spec.get("figer_avant_limite") and m["nb_points"]:
                 m["avant_limite"] = maintenant <= limite                  # à défaut, l'heure de la photographie
+            if not m["nb_points"]:
+                m["avant_limite"] = None                                  # rien reçu : rien à figer
         if spec.get("figer_avant_limite"):
             p = prec_meta.get(nom)
             if p and p.get("avant_limite") and not (m and m["avant_limite"]):

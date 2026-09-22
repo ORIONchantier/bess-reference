@@ -113,7 +113,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.7</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.8</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -284,10 +284,11 @@
         <label><input type="checkbox" data-serie="IDA3" disabled> IDA3</label>
         <label style="margin-left:10px" title="Prix moyen pondéré des activations aFRR à la hausse, €/MWh"><input type="checkbox" data-serie="AEUP" disabled> aFRR énergie ↑</label>
         <label title="Prix moyen pondéré des activations aFRR à la baisse, €/MWh"><input type="checkbox" data-serie="AEDN" disabled> aFRR énergie ↓</label>
-        <label style="margin-left:10px" title="Prévision RTE J-1 : consommation moins solaire moins éolien, MW, axe de droite"><input type="checkbox" data-serie="RESID" disabled> Charge résiduelle prévue</label>
-        <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="CONSO" disabled> Conso prévue</label>
-        <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="SOL" disabled> Solaire prévu</label>
-        <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="EOL" disabled> Éolien prévu</label>
+        <label style="margin-left:10px" title="Prévisions RTE J-1 : consommation moins solaire moins éolien, MW, axe de droite"><input type="checkbox" data-serie="RESID" disabled> Charge résiduelle prévue J-1</label>
+        <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="CONSO" disabled> Conso prévue J-1</label>
+        <label title="Prévision RTE J-1, publiée vers 16h en J-1, MW, axe de droite"><input type="checkbox" data-serie="SOL" disabled> Solaire prévu J-1</label>
+        <label title="Prévision RTE J-1, publiée vers 16h en J-1, MW, axe de droite"><input type="checkbox" data-serie="EOL" disabled> Éolien prévu J-1</label>
+        <label title="Prévision RTE J-2 de la production sous obligation d'achat EDF (éolien, solaire et autres filières), seule prévision de production disponible avant 9h en J-1, MW, axe de droite"><input type="checkbox" data-serie="OA" disabled> Production OA prévue J-2</label>
       </span>
       <span class="note" id="ida-note"></span>
       <span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
@@ -482,15 +483,20 @@ async function chargerDA(){
   const seriesEn = [];
   for(const j of jours){ const en = await lire(`data/afrr_energie/${j}.json`); if(en && en.length) seriesEn.push(en.map(p => ({cle: cleQuart(p.debut), up: p.prix_hausse_eur_mwh === null ? undefined : Number(p.prix_hausse_eur_mwh), dn: p.prix_baisse_eur_mwh === null ? undefined : Number(p.prix_baisse_eur_mwh)}))); }
   const seriesPrev = [];
-  for(const j of jours){ const pv = await lire(`data/previsions/${j}.json`); if(pv && pv.length) seriesPrev.push(pv.map(p => ({cle: cleQuart(p.debut), resid: p.charge_residuelle_mw ?? undefined, conso: p.consommation_mw ?? undefined, sol: p.solaire_mw ?? undefined, eol: p.eolien_mw ?? undefined}))); }
+  for(const j of jours){ const pv = await lire(`data/previsions/${j}.json`); if(pv && pv.length) seriesPrev.push(pv.map(p => ({cle: cleQuart(p.debut), resid: p.charge_residuelle_mw ?? undefined, conso: p.consommation_mw ?? undefined, sol: p.solaire_mw ?? undefined, eol: p.eolien_mw ?? undefined, oa: p.oa_j2_mw ?? undefined}))); }
+  // une case n'est active que si la série a au moins une valeur sur la sélection
+  const champPrev = {RESID:"resid", CONSO:"conso", SOL:"sol", EOL:"eol", OA:"oa"};
+  const prevPresente = c => seriesPrev.some(pts => pts.some(p => typeof p[c] === "number"));
   for(const cb of document.querySelectorAll('#ida-cases input[type="checkbox"]')){
     const s = cb.dataset.serie;
-    if(["RESID","CONSO","SOL","EOL"].includes(s)){ cb.disabled = !seriesPrev.length; if(cb.disabled) cb.checked = false; }
+    if(champPrev[s]){ cb.disabled = !prevPresente(champPrev[s]); if(cb.disabled) cb.checked = false; }
     else if(s === "AEUP" || s === "AEDN"){ cb.disabled = !seriesEn.length; if(cb.disabled) cb.checked = false; }
     else if(s !== "DA"){ cb.disabled = !encheres.includes(s); if(cb.disabled) cb.checked = false; }
   }
   note.textContent = (!unique ? "Enchères intraday : sélectionner un jour unique. " : (encheres.length ? "Enchères déposées : " + encheres.join(", ") + ". " : "Aucune enchère intraday déposée pour ce jour. "))
-    + (seriesEn.length ? "Activations aFRR : prix publiés par RTE, à la baisse le fournisseur paie si le prix est positif." : "Activations aFRR : pas encore publiées pour cette sélection.");
+    + (seriesEn.length ? "Activations aFRR : prix publiés par RTE, à la baisse le fournisseur paie si le prix est positif." : "Activations aFRR : pas encore publiées pour cette sélection.")
+    + (seriesPrev.length && !prevPresente("conso") ? " Conso prévue et charge résiduelle : pas de prévision de consommation (application RTE non abonnée à l'API Consumption)." : "")
+    + (seriesPrev.length && !prevPresente("sol") ? " Solaire et éolien J-1 : publiés vers 16h en J-1." : "");
   const series = [], vols = [];
   for(const j of jours){ const pts = await lire(`data/da/${j}.json`); if(pts) series.push(pts.map(p => ({cle: cleQuart(p.debut), prix: Number(p.prix), volume: Number(p.volume_mw) || 0}))); }
   if(!series.length){ vide.hidden = false; vide.textContent = "Aucune donnée day-ahead pour la sélection."; return; }
@@ -513,7 +519,7 @@ async function chargerDA(){
   let axeMW = false;
   if(seriesPrev.length){
     const mP = moyenneParQuart(seriesPrev), parCle = new Map(mP.map(p => [p.cle, p]));
-    const def = [["RESID","resid","Charge résiduelle prévue (MW)","#f97316"],["CONSO","conso","Consommation prévue (MW)","#c9d1d9"],["SOL","sol","Solaire prévu (MW)","#eab308"],["EOL","eol","Éolien prévu (MW)","#38bdf8"]];
+    const def = [["RESID","resid","Charge résiduelle prévue J-1 (MW)","#f97316"],["CONSO","conso","Consommation prévue J-1 (MW)","#c9d1d9"],["SOL","sol","Solaire prévu J-1 (MW)","#eab308"],["EOL","eol","Éolien prévu J-1 (MW)","#38bdf8"],["OA","oa","Production OA prévue J-2 (MW)","#4ade80"]];
     for(const [serie, champ, label, col] of def){
       const cb = document.querySelector(`#ida-cases input[data-serie="${serie}"]`);
       datasets.push({label, serie, unite:"MW", data: labels.map(l => parCle.has(l) && parCle.get(l)[champ] !== undefined ? parCle.get(l)[champ] : null), borderColor: col, borderWidth:1.2, pointRadius:0, yAxisID:"yMW", hidden: !(cb && cb.checked)});
@@ -916,9 +922,14 @@ async function chargerAgent(){
   txt("agent-regle", ""); txt("agent-note", "");
   const ia = await lire("data/agent/index.json");
   if(!ia || !ia.decisions || !ia.decisions.length){ txt("agent-demain", "Agent pas encore calculé : lancer le workflow « Agent, rattrapage historique » sur GitHub, puis attendre la collecte suivante."); return; }
-  // dernière décision disponible : en principe demain
+  // décision pour demain (heure de Paris) ; à défaut, on dit pourquoi et quelle est la dernière
+  const auj = new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/Paris"}).format(new Date());
+  const dem = new Date(Date.parse(auj + "T12:00:00Z") + 864e5).toISOString().slice(0, 10);
   const derJ = ia.decisions[ia.decisions.length - 1], der = await lire(`data/agent/decisions/${derJ}.json`);
-  if(der) txt("agent-demain", `Décision pour le ${fmtJour(derJ)} (${der.fige ? (der.reconstitue ? "reconstituée" : "figée à " + fmtHeure(der.limite_decision)) : "provisoire, figée à " + fmtHeure(der.limite_decision)}) : ${der.regle.texte}. Attendu ${fmt(der.attendu.moyenne,0)} €/MW/j (p10 ${fmt(der.attendu.p10,0)}, p90 ${fmt(der.attendu.p90,0)}) sur ${der.fenetre.nb_jours} jours du ${fmtJour(der.fenetre.du)} au ${fmtJour(der.fenetre.au)}` + (der.regle_fixe_attendu ? `, contre ${fmt(der.regle_fixe_attendu.moyenne,0)} pour la règle fixe.` : "."));
+  if(derJ !== dem){
+    txt("agent-demain", `Pas de décision pour demain ${fmtJour(dem)}. Dernière décision : ${fmtJour(derJ)}. L'agent attend que les 30 jours de sa fenêtre soient évalués ` +
+      `(${ia.evaluees_completes ?? "?"} journées complètes évaluées${ia.blocage ? " ; " + ia.blocage : ""}).`);
+  } else if(der) txt("agent-demain", `Décision pour demain ${fmtJour(derJ)} (${der.fige ? (der.reconstitue ? "reconstituée" : "figée à " + fmtHeure(der.limite_decision)) : "provisoire, figée à " + fmtHeure(der.limite_decision)}) : ${der.regle.texte}. Attendu ${fmt(der.attendu.moyenne,0)} €/MW/j (p10 ${fmt(der.attendu.p10,0)}, p90 ${fmt(der.attendu.p90,0)}) sur ${der.fenetre.nb_jours} jours du ${fmtJour(der.fenetre.du)} au ${fmtJour(der.fenetre.au)}` + (der.regle_fixe_attendu ? `, contre ${fmt(der.regle_fixe_attendu.moyenne,0)} pour la règle fixe.` : "."));
   if(cleScenario() !== ia.scenario) txt("agent-note", `calculé en raccordement ${ia.scenario}, pas pour le raccordement affiché`);
   const decs = [];
   for(const j of jours){ const d = await lire(`data/agent/decisions/${j}.json`); if(d) decs.push(d); }

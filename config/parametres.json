@@ -177,7 +177,7 @@
     "fenetre_min_jours": 10,
     "lambda_ecart_type": 0.5,
     "scenario": "BT",
-    "evaluations_max_par_passage": 5,
+    "evaluations_max_par_passage": 40,
     "grille": {
       "baisse_plages": [[], [["10:00", "17:00"]], [["11:00", "16:00"]], [["09:00", "18:00"]], [["00:00", "06:00"]], [["00:00", "06:00"], ["10:00", "17:00"]]],
       "hausse_plages": [[], [["18:00", "22:00"]], [["17:00", "23:00"]], [["06:00", "09:00"], ["18:00", "22:00"]], [["07:00", "10:00"]]],
@@ -214,14 +214,6 @@
         },
         "source": "guide Generation Forecast v03.01.01 §4.1.1 : v3, filières WIND_ONSHORE / WIND_OFFSHORE / SOLAR, valeurs multiples séparées par une virgule, 21 jours maximum par appel, pas 15 min, updated_date par valeur"
       },
-      "production_courante": {
-        "chemin": "generation_forecast/v3/forecasts",
-        "parametres": {
-          "production_type": "SOLAR,WIND_ONSHORE,WIND_OFFSHORE",
-          "type": "CURRENT"
-        },
-        "source": "guide §2.3.1 et §4.1.1.1 : échéance « courante », mise à jour vers 9h30 et 19h30 et avec J-1 / IJ. Horizon couvert (J+1 ou non) non précisé par le guide : à constater"
-      },
       "oa_j2": {
         "chemin": "generation_forecast/v3/forecasts",
         "parametres": {
@@ -236,15 +228,13 @@
       "solaire": {"ressource": "production", "type": "D-1", "production_type": ["SOLAR"]},
       "eolien": {"ressource": "production", "type": "D-1", "production_type": ["WIND_ONSHORE", "WIND_OFFSHORE"]},
       "consommation_j2": {"ressource": "consommation_j2", "type": "D-2"},
-      "solaire_courante": {"ressource": "production_courante", "type": "CURRENT", "production_type": ["SOLAR"], "figer_avant_limite": true},
-      "eolien_courante": {"ressource": "production_courante", "type": "CURRENT", "production_type": ["WIND_ONSHORE", "WIND_OFFSHORE"], "figer_avant_limite": true},
       "oa_j2": {"ressource": "oa_j2", "type": "D-2", "production_type": ["AGGREGATED_CPC"]}
     },
     "charges_residuelles": {
-      "charge_residuelle": ["consommation", "solaire", "eolien"],
-      "charge_residuelle_limite": ["consommation_j2", "solaire_courante", "eolien_courante"]
+      "charge_residuelle": ["consommation", "solaire", "eolien"]
     },
-    "horaires_publication": "Guide Generation Forecast §4.1.1.1 : solaire et éolien J-1 à appeler vers 17h, échéance réglementaire 18h ; « courante » mise à jour vers 9h30 et 19h30. La J-1 n'existe donc pas à 9h en J-1. J-2 n'est décrite que pour l'agrégat OA et la MDSE (SOLAR + D-2 : erreur 400 constatée le 21/09/2026, probablement F08). Entrées de l'agent : courante photographiée avant la limite (à partir d'aujourd'hui seulement) et OA J-2 (historique possible).",
+    "constats": "22/09/2026 : solaire et éolien J-1 publiés à 16h15 en J-1 ; la prévision courante ne couvre J+1 qu'à partir de la mise à jour de 19h15 en J-1 (0 valeur à 9h15) : retirée. Seule l'agrégée OA J-2 (DA01 vers 10h30, DA02 vers 13h45 en J-2) est disponible avant 9h en J-1. Consommation : 403, application non abonnée à l'API Consumption.",
+    "horaires_publication": "Guide Generation Forecast §4.1.1.1 : solaire et éolien J-1 à appeler vers 17h, échéance réglementaire 18h ; « courante » mise à jour vers 9h30 et 19h30. La J-1 n'existe donc pas à 9h en J-1. J-2 n'est décrite que pour l'agrégat OA et la MDSE (SOLAR + D-2 : erreur 400 constatée le 21/09/2026, probablement F08). Entrée utilisable par l'agent : OA J-2 (historique possible). Voir constats.",
     "marges": "API à identifier (publiée sur la page équilibrage de services-rte) : non branchée"
   },
   "indisponibilites": {

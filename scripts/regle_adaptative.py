@@ -309,6 +309,10 @@ def main():
     maintenant = dt.datetime.now(PARIS)
     demain = maintenant.date() + dt.timedelta(days=1)
     d0 = dt.date.fromisoformat(min(ev))
+    # les décisions existantes plus anciennes que la première journée évaluée sont aussi parcourues, pour retirer les périmées
+    anciennes = sorted(p.stem for p in (DOSSIER / "decisions").glob("????-??-??.json"))
+    if anciennes:
+        d0 = min(d0, dt.date.fromisoformat(anciennes[0]))
     cibles = [d0 + dt.timedelta(days=k) for k in range((demain - d0).days + 1)]
     (DOSSIER / "decisions").mkdir(exist_ok=True)
     nouvelles = supprimees = 0

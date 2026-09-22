@@ -130,7 +130,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.14</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.15</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -1084,9 +1084,9 @@ async function chargerDecomp(){
   h += ligne("Sous-total day-ahead", daT, "sous", couleur("--cyan"));
   h += groupe("Énergie aFRR : activations réelles de RTE, estimées", couleur("--violet"));
   h += ligne("Énergie livrée à la hausse (payée)", c => c.en_up);
-  h += ligne("Énergie absorbée à la baisse (payée par nous si prix positif)", c => -c.en_dn);
+  h += ligne("Énergie absorbée à la baisse (coût si prix positif, gain si négatif)", c => -c.en_dn);
   h += ligne("TURPE sur l'énergie absorbée", c => -c.en_turpe);
-  h += ligne("Écart de charge en fin de journée, valorisé au DA", c => c.en_ecart);
+  h += ligne("Écart de charge à minuit, au coût de recharge du lendemain", c => c.en_ecart);
   h += ligne("Sous-total énergie", enT, "sous", couleur("--violet"));
   h += ligne("Total", c => capT(c) + daT(c) + enT(c), "total");
   tab.innerHTML = h;

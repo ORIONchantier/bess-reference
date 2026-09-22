@@ -110,7 +110,8 @@
   .bloc.rubrique{background:transparent;border:1px dashed #2c3a4f;padding:14px 14px 2px}
   .bloc.rubrique > .bloc-titre h2{color:var(--jaune);font-size:13px}
   .bloc.rubrique.replie{padding-bottom:14px}
-  .export{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .export{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
+  .export .note{flex-basis:100%;text-align:right}
 </style>
 </head>
 <body>
@@ -139,13 +140,13 @@
           <button type="button" class="bouton" id="sites-importer" hidden title="Remplace data/reference/sites.csv par votre fichier">Importer mes sites</button>
           <input type="file" id="sites-fichier" accept=".csv,text/csv" hidden>
         </span>
-        <span class="export" title="Fichiers CSV de la sélection en cours (séparateur point-virgule, virgule décimale, lisibles par Excel)">
-          <label>Exporter</label>
-          <button type="button" class="bouton" id="csv-jours">⬇ CSV par jour</button>
-          <button type="button" class="bouton" id="csv-quarts">⬇ CSV par quart d'heure</button>
-          <span class="note" id="csv-etat"></span>
-        </span>
       </div>
+      <span class="export" title="Fichiers CSV de la sélection en cours (séparateur point-virgule, virgule décimale, lisibles par Excel)">
+        <label>Exporter</label>
+        <button type="button" class="bouton" id="csv-jours">⬇ CSV par jour</button>
+        <button type="button" class="bouton" id="csv-quarts">⬇ CSV par quart d'heure</button>
+        <span class="note" id="csv-etat"></span>
+      </span>
     </div>
     <div class="note" id="note-batterie" style="margin-top:10px">Batterie de référence 250 kW / 500 kWh, SoC 5-95 %, rendement 95 %, 2 cycles/jour</div>
     <div class="note" id="note-tarif" style="color:var(--jaune)"></div>

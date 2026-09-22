@@ -260,14 +260,19 @@ def realise(dec: dict, ev: dict):
         return None
     i = dec["regle"]["indice"]
     tot = [x for x in e["total"] if x is not None]
-    out = {"complet": e["complet"], "capacite_da": e["capacite_da"][i], "total": e["total"][i],
+    cap = [x for x in e["capacite_da"] if x is not None]
+    out = {"complet": e["complet"], "pas_energie": e.get("pas_energie"), "capacite_da": e["capacite_da"][i], "total": e["total"][i],
            "regle_fixe": e["total"][I_FIXE] if I_FIXE is not None else None,
            "da_seul": e["total"][I_DA] if I_DA is not None else None,
-           "meilleure_regle_a_posteriori": max(tot) if tot else None}
+           "meilleure_regle_a_posteriori": max(tot) if tot else None,
+           # repères sans énergie activée : disponibles dès que DA et capacité sont publiés, avant la fin de la journée
+           "da_seul_capacite_da": e["capacite_da"][I_DA] if I_DA is not None else None,
+           "meilleure_regle_capacite_da": max(cap) if cap else None}
     try:
         sc = json.loads((DATA / "resultats" / f"{dec['jour']}.json").read_text())["scenarios"][dec["scenario"]]
         xp = (sc.get("ex_post") or {}).get("optimum")
-        out["optimum"] = round(sc["optimum"]["net_eur_par_mw"] + (xp["complement_net_eur_par_mw"] if xp else 0), 1) if xp else None
+        out["optimum"] = round(sc["optimum"]["net_eur_par_mw"] + xp["complement_net_eur_par_mw"], 1) if xp and not xp.get("partiel") else None
+        out["optimum_capacite_da"] = sc["optimum"]["net_eur_par_mw"]
     except Exception:
         out["optimum"] = None
     return out

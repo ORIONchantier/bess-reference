@@ -118,7 +118,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.9</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.10</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -973,7 +973,19 @@ async function chargerAgent(){
   else { const freq = new Map(); for(const d of decs) freq.set(d.regle.texte, (freq.get(d.regle.texte) || 0) + 1);
     const top = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
     txt("agent-regle", `${decs.length} décisions sur la sélection, ${freq.size} règle${freq.size > 1 ? "s" : ""} différente${freq.size > 1 ? "s" : ""}. Les plus fréquentes : ` + top.map(([t, k]) => `${t} (${k} j)`).join(" · ")); }
-  if(!faits.length){ txt("a-s-agent", unique ? "journée pas encore livrée ou activations incomplètes" : "aucune journée évaluée"); return; }
+  if(!faits.length){
+    // journée en cours ou pas encore livrée : capacité + DA connus dès la publication du DA, énergie activée plus tard
+    const r0 = unique && d0.realise;
+    if(r0 && defini(r0.capacite_da)){
+      document.getElementById("agent-regle").textContent += ` Résultats provisoires, sans l'énergie activée : ${r0.pas_energie ?? 0} quarts d'heure d'activations publiés sur 96.`;
+      txt("a-v-agent", fmt(r0.capacite_da, 0));
+      txt("a-s-agent", "provisoire : capacité aFRR + DA, énergie activée en attente de la fin de journée");
+      if(defini(r0.da_seul_capacite_da)){ txt("a-v-ecart", signe(r0.capacite_da - r0.da_seul_capacite_da)); txt("a-s-ecart", `provisoire, hors énergie · DA seul ${fmt(r0.da_seul_capacite_da,0)} €/MW`); }
+      if(r0.meilleure_regle_capacite_da > 0){ txt("a-v-best", fmt(100 * r0.capacite_da / r0.meilleure_regle_capacite_da, 0) + " %"); txt("a-s-best", `provisoire, hors énergie · meilleure règle ${fmt(r0.meilleure_regle_capacite_da,0)} €/MW`); }
+      if(r0.optimum_capacite_da > 0){ txt("a-v-part", fmt(100 * r0.capacite_da / r0.optimum_capacite_da, 0) + " %"); txt("a-s-part", `provisoire, hors énergie · optimum ${fmt(r0.optimum_capacite_da,0)} €/MW`); }
+    } else txt("a-s-agent", unique ? "pas encore évaluée : le day-ahead de la journée n'est pas publié" : "aucune journée évaluée");
+    return;
+  }
   const n = faits.length, S = (liste, f) => liste.reduce((a, d) => a + (Number(f(d.realise)) || 0), 0), parJ = v => unique ? "" : ` (${fmt(v / n, 0)}/j)`;
   const ag = S(faits, r => r.total);
   const avecDa = faits.filter(d => defini(d.realise.da_seul)), agD = S(avecDa, r => r.total), dz = S(avecDa, r => r.da_seul);

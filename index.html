@@ -130,7 +130,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.12</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-22.13</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -233,6 +233,9 @@
 
   </div>
 
+  <div class="bloc rubrique" id="rub-revenus">
+    <div class="bloc-titre"><h2>Revenus</h2><span class="note">Revenus de référence des stratégies, leur décomposition et leur détail jour par jour, en €/MW net de TURPE.</span></div>
+
   <div class="bloc" id="bloc-revenus">
     <div class="bloc-titre"><h2>Revenus de référence, €/MW net TURPE</h2><span class="note" id="note-expost"></span></div>
     <div class="rangee-lib" id="lib-cap">Capacité aFRR + arbitrage DA, sans énergie activée</div>
@@ -259,6 +262,13 @@
     </div>
   </div>
 
+  <div class="bloc" id="bloc-parjour" hidden>
+    <div class="bloc-titre"><h2>Détail par jour, total avec énergie</h2><span class="unite">€/MW/jour</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
+    <div class="graphe"><canvas id="g-parjour"></canvas></div>
+  </div>
+
+  </div>
+
   <div class="bloc rubrique" id="rub-chiffres">
     <div class="bloc-titre"><h2>Chiffres clés de la période</h2></div>
   <div class="tuiles" style="margin-bottom:0">
@@ -277,11 +287,6 @@
 
   <div class="bloc rubrique" id="rub-courbes">
     <div class="bloc-titre"><h2>Courbes de référence</h2></div>
-
-  <div class="bloc" id="bloc-parjour" hidden>
-    <div class="bloc-titre"><h2>Détail par jour, total avec énergie</h2><span class="unite">€/MW/jour</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
-    <div class="graphe"><canvas id="g-parjour"></canvas></div>
-  </div>
 
   <div class="bloc" id="bloc-prix">
     <div class="bloc-titre"><h2>Prix spot France : day-ahead, enchères intraday, activations aFRR</h2>

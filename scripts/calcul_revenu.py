@@ -4,7 +4,7 @@
   - stratégie aFRR seul
 Programme linéaire (scipy, solveur HiGHS) au pas 15 min, contraintes physiques de config/parametres.json.
 Écrit data/resultats/<jour>.json et met à jour data/index.json."""
-import json, math, sys, datetime as dt
+import json, math, sys, functools, datetime as dt
 from pathlib import Path
 from zoneinfo import ZoneInfo
 import numpy as np
@@ -27,7 +27,7 @@ CYCLES = B["cycles_max_par_jour"]
 K = B.get("facteur_marge_afrr_k", 1.0)
 BLOC = CFG.get("afrr", {}).get("bloc_reservation_min", 60)
 DT = 0.25                                                               # h par pas
-VERSION = 12                                                            # incrémenter force le recalcul des jours anciens
+VERSION = 13                                                           # incrémenter force le recalcul des jours anciens
 
 
 def instant(iso: str) -> int:
@@ -209,9 +209,25 @@ def strategie_realiste(da, prix_cap):
     return out
 
 
-def ex_post(jour: str, res: dict):
+@functools.lru_cache(maxsize=256)
+def cout_recharge(jour: str, tarif=None):
+    """Valeur de 1 MWh d'énergie restée dans la batterie à minuit, ou manquante : ce qu'il aurait fallu payer le lendemain
+    pour la charger, c'est-à-dire le prix DA + TURPE des quarts d'heure où la batterie se recharge (les moins chers de J+1,
+    autant qu'il en faut pour une charge complète). Si le DA de J+1 n'est pas encore publié : mêmes quarts d'heure de J.
+    Renvoie (coût €/MWh TURPE compris, prix DA seul €/MWh, "J+1" ou "J")."""
+    tarif = tarif or TARIF
+    lendemain = (dt.date.fromisoformat(jour) + dt.timedelta(days=1)).isoformat()
+    source = "J+1" if (DATA / "da" / f"{lendemain}.json").exists() else "J"
+    pts = dedoublonner_da(lendemain if source == "J+1" else jour)
+    couts = sorted(((float(p["prix"]) + tarif.soutirage(dt.datetime.fromisoformat(p["debut"]).astimezone(PARIS)), float(p["prix"])) for p in pts))
+    k = max(1, math.ceil((SOC_MAX - SOC_MIN) / ETA / (P_KW * DT)))        # quarts d'heure pour une charge complète
+    retenus = couts[:k]
+    return float(np.mean([c for c, _ in retenus])), float(np.mean([p for _, p in retenus])), source
+
+
+def ex_post(jour: str, res: dict, tarif=None):
     """Complément aFRR énergie une fois la journée livrée. Proxy : part activée = taux national par pas 15 min.
-    res : le dictionnaire d'un scénario (optimum, da_seul, afrr_seul, realiste)."""
+    res : le dictionnaire d'un scénario (optimum, da_seul, afrr_seul, realiste) ; tarif : TURPE du scénario."""
     path = DATA / "afrr_energie" / f"{jour}.json"
     if not path.exists():
         return None
@@ -221,6 +237,7 @@ def ex_post(jour: str, res: dict):
     par_instant = {instant(e["debut"]): e for e in en}
     couverts = sum(1 for p in res["optimum"]["plan"] if instant(p["debut"]) in par_instant) if res.get("optimum") and res["optimum"].get("plan") else len(en)
     utile = SOC_MAX - SOC_MIN
+    c_ref, prix_recharge, source_ref = cout_recharge(jour, tarif)
     out = {}
     for nom in ("optimum", "afrr_seul", "realiste", "afrr_seul_100"):
         # afrr_seul_100 : mêmes réserves que aFRR seul, mais nos offres en énergie sont retenues à 100 % :
@@ -238,8 +255,6 @@ def ex_post(jour: str, res: dict):
         for t in range(n - 1, -1, -1):
             m1, m2 = max(m1, soc_plan[t]), min(m2, soc_plan[t]); suf_max[t], suf_min[t] = m1, m2
         budget_cycles = CYCLES * utile - sum(pt["injection_kw"] for pt in plan) * DT / ETA   # kWh batterie encore déchargeables
-        prix_ref = float(np.mean([pt["prix_da"] for pt in plan]))          # DA moyen du jour : valeur de référence de l'énergie stockée
-        turpe_moy = float(np.mean([pt["turpe"] for pt in plan]))           # TURPE moyen de soutirage
         eta_rt = ETA * ETA
         rev_up = cout_dn = turpe = e_up_tot = e_dn_tot = ref_up = ref_dn = 0.0
         delta = 0.0; soc = []; manquants = 0; act_up_kw = []; act_dn_kw = []
@@ -256,10 +271,11 @@ def ex_post(jour: str, res: dict):
                     taux_dn = 1.0 if abs(e.get("active_baisse_mw") or 0) > 0 else 0.0
                 pu, pd = e.get("prix_hausse_eur_mwh") or 0.0, e.get("prix_baisse_eur_mwh") or 0.0
                 # règle d'offre en énergie : le prix demandé couvre le coût réel pour la batterie, à chaque quart d'heure.
-                # hausse : 1 MWh livré vide 1/eta_rt MWh à racheter (DA de référence + TURPE) -> activé si pu > prix_ref/eta_rt + turpe_moy
-                # baisse : 1 MWh absorbé coûte pd + TURPE(t) et rapporte eta_rt MWh revendables -> activé si pd + turpe(t) < eta_rt*prix_ref
-                if e.get("prix_hausse_eur_mwh") is None or pu <= prix_ref / eta_rt + turpe_moy: taux_up = 0.0
-                if e.get("prix_baisse_eur_mwh") is None or pd + pt["turpe"] >= eta_rt * prix_ref: taux_dn = 0.0
+                # Référence c_ref : coût de recharge (DA + TURPE) des quarts d'heure les moins chers du lendemain.
+                # hausse : 1 MWh livré vide 1/ETA MWh de batterie, à recharger avec 1/eta_rt MWh -> activé si pu - TURPE inj(t) > c_ref/eta_rt
+                # baisse : 1 MWh absorbé coûte pd + TURPE(t) et évite 1 MWh d'achat le lendemain -> activé si pd + TURPE(t) < c_ref
+                if e.get("prix_hausse_eur_mwh") is None or pu - pt.get("turpe_inj", 0.0) <= c_ref / eta_rt: taux_up = 0.0
+                if e.get("prix_baisse_eur_mwh") is None or pd + pt["turpe"] >= c_ref: taux_dn = 0.0
             d_up = pt["reserve_hausse_kw"] * taux_up * DT              # kWh demandés à la hausse (côté réseau)
             d_dn = pt["reserve_baisse_kw"] * taux_dn * DT              # kWh demandés à la baisse
             # plafonds : SoC tenable sur le reste de la journée, et budget de cycles
@@ -279,9 +295,10 @@ def ex_post(jour: str, res: dict):
         if manquants and couverts >= 96: alertes.append(f"{manquants} pas sans donnée d'activation")
         cycles = (sum(pt["injection_kw"] for pt in plan) * DT + e_up_tot) / ETA / utile
         mw = P_KW / 1000
-        # valeur de l'écart de SoC en fin de journée : surplus revendu, manque racheté, au prix DA moyen de la journée
+        # valeur de l'écart de SoC à minuit : un surplus de delta kWh évite d'acheter delta/ETA kWh le lendemain aux heures de
+        # recharge, un manque oblige à les acheter. Même coût de référence c_ref (DA + TURPE) dans les deux sens.
         prix_moy_da = float(np.mean([pt["prix_da"] for pt in plan])) if plan else 0.0
-        valeur_ecart = (delta * ETA if delta >= 0 else delta / ETA) / 1000 * prix_moy_da
+        valeur_ecart = delta / ETA / 1000 * c_ref
         net = rev_up - cout_dn - turpe + valeur_ecart
         # règle : on ne dépose d'offre en énergie que si elle rapporte. Sinon, aucune activation ce jour-là
         # (offres au plafond), et on garde le montant qu'elle aurait coûté pour information.
@@ -298,9 +315,11 @@ def ex_post(jour: str, res: dict):
                     "total_net_eur_par_mw": round(o["net_eur_par_mw"] + net / mw, 1),
                     "cycles_reels": round(cycles, 3), "ecart_soc_fin_kwh": round(delta, 1),
                     "valeur_ecart_soc_eur": round(valeur_ecart, 2), "prix_da_moyen_eur_mwh": round(prix_moy_da, 2),
+                    "cout_recharge_eur_mwh": round(c_ref, 2), "prix_recharge_da_eur_mwh": round(prix_recharge, 2),
+                    "reference_recharge": source_ref,
                     "sans_offre_energie": bool(sans_offre), "net_si_offre_eur_par_mw": round(net_si_offre / mw, 1),
                     "soc_reel_kwh": soc, "active_hausse_kw": act_up_kw, "active_baisse_kw": act_dn_kw, "alertes": alertes,
-                    "pas_couverts": int(couverts), "partiel": couverts < 96}
+                    "pas_couverts": int(couverts), "partiel": couverts < 96 or source_ref != "J+1"}
     return out or None
 
 
@@ -346,6 +365,7 @@ def main():
             print(f"{j} {cle} : optimum {o.get('net_eur_par_mw', '?')} €/MW net, DA seul {(sc['da_seul'] or {}).get('net_eur_par_mw', '?')}, "
                   f"aFRR seul {(sc['afrr_seul'] or {}).get('net_eur_par_mw', '?')}, réaliste {rl.get('net_eur_par_mw', rl.get('erreur', '?'))}, cycles {o.get('cycles', '?')}")
     # passe ex post : journées livrées dont les activations sont complètes
+    tarifs = dict(turpe_mod.scenarios())
     for cible in sorted((DATA / "resultats").glob("????-??-??.json")):
         r = json.loads(cible.read_text())
         if r.get("version") != VERSION:
@@ -356,7 +376,7 @@ def main():
             if deja and not any(v.get("partiel") for v in deja.values()):
                 continue                                   # définitif, rien à refaire
             try:
-                xp = ex_post(cible.stem, sc)
+                xp = ex_post(cible.stem, sc, tarifs.get(cle))
             except Exception as err:
                 print(f"{cible.stem} {cle} : estimation énergie impossible, {type(err).__name__}: {err}")
                 continue

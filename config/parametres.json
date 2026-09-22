@@ -67,7 +67,7 @@
     }
   },
   "ex_post": {
-    "description": "Complément aFRR énergie calculé une fois la journée livrée : part activée = taux national (volume activé / besoin RTE) appliqué aux MW réservés ; prix = prix moyen pondéré publié. Convention RM chap. 4 : à la baisse un prix positif est payé par le fournisseur de réserve, à la hausse il lui est versé. TURPE appliqué à l'énergie absorbée.",
+    "description": "Complément aFRR énergie calculé une fois la journée livrée : part activée = taux national (volume activé / besoin RTE) appliqué aux MW réservés ; prix = prix moyen pondéré publié. Convention RM chap. 4 : à la baisse un prix positif est payé par le fournisseur de réserve, à la hausse il lui est versé. TURPE appliqué à l'énergie absorbée. Énergie stockée valorisée au coût de recharge du lendemain : DA + TURPE des quarts d'heure les moins chers de J+1 (autant que pour une charge complète), pour l'acceptation des offres en énergie et pour l'écart de SoC à minuit (depuis la version 13 de calcul_revenu).",
     "proxy_part_activee": "taux_national"
   },
   "turpe_hta": {

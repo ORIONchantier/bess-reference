@@ -125,7 +125,7 @@ def resoudre(prep, ru, rd, jour):
          "plan": [{"debut": prep["da"][t]["debut"], "soutirage_kw": float(c[t]), "injection_kw": float(d[t]), "soc_kwh": float(soc[t]),
                    "reserve_hausse_kw": float(ru_t[t]), "reserve_baisse_kw": float(rd_t[t]), "prix_da": float(prix[t]),
                    "turpe": float(turpe[t]), "turpe_inj": float(turpe_i[t])} for t in range(n)]}
-    xp = CR.ex_post(jour, {"realiste": o})
+    xp = CR.ex_post(jour, {"realiste": o}, TARIF)
     xr = xp["realiste"] if xp and "realiste" in xp else None
     return o["net_eur_par_mw"], (xr["complement_net_eur_par_mw"] if xr else None), o, xr
 

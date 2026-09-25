@@ -11,6 +11,7 @@ BASE_URL = "https://digital.iservices.rte-france.com/open_api/"
 RES_DA = "wholesale_market/v3/france_power_exchanges"              # guide Wholesale Market v3.0
 RES_AFRR_CAP = "balancing_capacity/v5/result_procured_reserves"    # guide Balancing Capacity v5.0.3
 RES_AFRR_ENERGIE = "balancing_energy/v5/standard_afrr_data"        # guide Balancing Energy v5.2.2
+RES_ECARTS = "balancing_energy/v5/imbalance_data"                  # même guide §5.2 : prix de règlement des écarts
 PARIS = ZoneInfo("Europe/Paris")
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
@@ -94,6 +95,21 @@ def parse_afrr_energie(payload: dict) -> list:
     return pts
 
 
+def parse_ecarts(payload: dict) -> list:
+    """Guide v5.2.2 §5.2 : imbalance_data[].values[] au pas 15 min depuis le 01/01/2025 (30 min avant).
+    Deux prix par pas : règlement des écarts positifs (on a injecté plus que prévu) et négatifs (moins que prévu).
+    Le calcul est révisé après coup : updated_date indique la dernière mise à jour."""
+    pts = []
+    for bloc in payload.get("imbalance_data", []):
+        for v in bloc.get("values", []):
+            pts.append({"debut": v["start_date"], "fin": v.get("end_date"),
+                        "desequilibre_mw": v.get("imbalance"), "tendance": v.get("system_trend"),
+                        "pre_positif_eur_mwh": v.get("positive_imbalance_settlement_price"),
+                        "pre_negatif_eur_mwh": v.get("negative_imbalance_settlement_price"),
+                        "donnees_manquantes": v.get("missing_data_list"), "maj": v.get("updated_date")})
+    return sorted(pts, key=lambda p: p["debut"])
+
+
 def bornes(day: dt.date) -> dict:
     start = dt.datetime.combine(day, dt.time(0), PARIS)
     return {"start_date": start.isoformat(timespec="seconds"),
@@ -104,8 +120,9 @@ def rebuild_index() -> None:
     jours = sorted(p.stem for p in (DATA / "da").glob("????-??-??.json"))
     cap = sorted(p.stem for p in (DATA / "afrr_capacite").glob("????-??-??.json"))
     en = sorted(p.stem for p in (DATA / "afrr_energie").glob("????-??-??.json"))
+    ec = sorted(p.stem for p in (DATA / "ecarts").glob("????-??-??.json")) if (DATA / "ecarts").exists() else []
     (DATA / "index.json").write_text(json.dumps(
-        {"jours": jours, "afrr_capacite": cap, "afrr_energie": en,
+        {"jours": jours, "afrr_capacite": cap, "afrr_energie": en, "ecarts": ec,
          "mis_a_jour": dt.datetime.now(PARIS).isoformat(timespec="minutes")}))
 
 
@@ -146,6 +163,19 @@ def main() -> None:
                 print("  réponse brute :", json.dumps(en)[:300])
         except Exception as e:
             print(f"aFRR énergie {jour} : échec,", e)
+
+    # prix de règlement des écarts : J-2 à J (le calcul de RTE est révisé pendant quelques jours)
+    for jour in (today - dt.timedelta(days=2), today - dt.timedelta(days=1), today):
+        try:
+            ec = call(token, RES_ECARTS, bornes(jour))
+            ec_pts = parse_ecarts(ec)
+            if ec_pts:
+                save("ecarts", jour, ec, ec_pts)
+            print(f"écarts {jour} : {len(ec_pts)} pas de règlement")
+            if not ec_pts:
+                print("  réponse brute :", json.dumps(ec)[:300])
+        except Exception as e:
+            print(f"écarts {jour} : échec,", e)
 
     rebuild_index()
     if day != attendu:

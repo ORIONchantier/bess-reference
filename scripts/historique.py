@@ -125,6 +125,29 @@ def main():
                 time.sleep(1)
             d = f + dt.timedelta(days=1)
 
+        # prix de règlement des écarts : un mois par appel au maximum en JSON (guide Balancing Energy, RG_COM_E_03)
+        d = du
+        while d <= au:
+            f = min(au, (d.replace(day=1) + dt.timedelta(days=32)).replace(day=1) - dt.timedelta(days=1))
+            manquants = [j for j in jours(d, f) if force or not existe("ecarts", j)]
+            if manquants:
+                start = dt.datetime.combine(d, dt.time(0), PARIS); end = dt.datetime.combine(f + dt.timedelta(days=1), dt.time(0), PARIS)
+                try:
+                    ec = C.call(token, C.RES_ECARTS, {"start_date": start.isoformat(timespec="seconds"), "end_date": end.isoformat(timespec="seconds")})
+                    pts = C.parse_ecarts(ec)
+                    par_jour = {}
+                    for p in pts:
+                        jj = dt.datetime.fromisoformat(p["debut"].replace("Z", "+00:00")).astimezone(PARIS).date().isoformat()
+                        par_jour.setdefault(jj, []).append(p)
+                    for jj, l in par_jour.items():
+                        if force or not existe("ecarts", dt.date.fromisoformat(jj)):
+                            (DATA / "ecarts").mkdir(exist_ok=True); (DATA / "ecarts" / f"{jj}.json").write_text(json.dumps(l, ensure_ascii=False))
+                    print(f"écarts {d} -> {f} : {len(pts)} pas, {len(par_jour)} jours")
+                except Exception as e:
+                    print(f"écarts {d} -> {f} : échec, {e}")
+                time.sleep(1)
+            d = f + dt.timedelta(days=1)
+
     if "--sans-da" not in sys.argv:
         tok = os.environ.get("ENTSOE_TOKEN")
         if not tok:

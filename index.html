@@ -130,7 +130,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-22.15</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-25.16</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -301,7 +301,8 @@
         <label title="Prévision RTE J-1, MW, axe de droite"><input type="checkbox" data-serie="CONSO" disabled> Conso prévue J-1</label>
         <label title="Prévision RTE J-1, publiée vers 16h en J-1, MW, axe de droite"><input type="checkbox" data-serie="SOL" disabled> Solaire prévu J-1</label>
         <label title="Prévision RTE J-1, publiée vers 16h en J-1, MW, axe de droite"><input type="checkbox" data-serie="EOL" disabled> Éolien prévu J-1</label>
-        <label title="Prévision RTE J-2 de la production sous obligation d'achat EDF (éolien, solaire et autres filières), seule prévision de production disponible avant 9h en J-1, MW, axe de droite"><input type="checkbox" data-serie="OA" disabled> Production OA prévue J-2</label>
+        <label style="margin-left:10px" title="Prix de règlement des écarts positifs : ce que perçoit un responsable d'équilibre qui a injecté plus que prévu, €/MWh"><input type="checkbox" data-serie="PREP" disabled> PRE positif</label>
+        <label title="Prix de règlement des écarts négatifs : ce que paie un responsable d'équilibre qui a injecté moins que prévu, €/MWh"><input type="checkbox" data-serie="PREN" disabled> PRE négatif</label>
       </span>
       <span class="note" id="ida-note"></span>
       <span class="unite">€/MWh · pas 15 min</span><button class="agrandir" title="Plein écran, Échap pour revenir">⛶</button></div>
@@ -534,20 +535,25 @@ async function chargerDA(){
   const seriesEn = [];
   for(const j of jours){ const en = await lire(`data/afrr_energie/${j}.json`); if(en && en.length) seriesEn.push(en.map(p => ({cle: cleQuart(p.debut), up: p.prix_hausse_eur_mwh === null ? undefined : Number(p.prix_hausse_eur_mwh), dn: p.prix_baisse_eur_mwh === null ? undefined : Number(p.prix_baisse_eur_mwh)}))); }
   const seriesPrev = [];
-  for(const j of jours){ const pv = await lire(`data/previsions/${j}.json`); if(pv && pv.length) seriesPrev.push(pv.map(p => ({cle: cleQuart(p.debut), resid: p.charge_residuelle_mw ?? undefined, conso: p.consommation_mw ?? undefined, sol: p.solaire_mw ?? undefined, eol: p.eolien_mw ?? undefined, oa: p.oa_j2_mw ?? undefined}))); }
+  for(const j of jours){ const pv = await lire(`data/previsions/${j}.json`); if(pv && pv.length) seriesPrev.push(pv.map(p => ({cle: cleQuart(p.debut), resid: p.charge_residuelle_mw ?? undefined, conso: p.consommation_mw ?? undefined, sol: p.solaire_mw ?? undefined, eol: p.eolien_mw ?? undefined}))); }
+  const seriesEc = [];
+  for(const j of jours){ const ec = await lire(`data/ecarts/${j}.json`); if(ec && ec.length) seriesEc.push(ec.map(p => ({cle: cleQuart(p.debut), prep: p.pre_positif_eur_mwh ?? undefined, pren: p.pre_negatif_eur_mwh ?? undefined}))); }
   // une case n'est active que si la série a au moins une valeur sur la sélection
-  const champPrev = {RESID:"resid", CONSO:"conso", SOL:"sol", EOL:"eol", OA:"oa"};
-  const prevPresente = c => seriesPrev.some(pts => pts.some(p => typeof p[c] === "number"));
+  const champPrev = {RESID:"resid", CONSO:"conso", SOL:"sol", EOL:"eol"}, champEc = {PREP:"prep", PREN:"pren"};
+  const presente = (series, c) => series.some(pts => pts.some(p => typeof p[c] === "number"));
+  const prevPresente = c => presente(seriesPrev, c);
   for(const cb of document.querySelectorAll('#ida-cases input[type="checkbox"]')){
     const s = cb.dataset.serie;
     if(champPrev[s]){ cb.disabled = !prevPresente(champPrev[s]); if(cb.disabled) cb.checked = false; }
+    else if(champEc[s]){ cb.disabled = !presente(seriesEc, champEc[s]); if(cb.disabled) cb.checked = false; }
     else if(s === "AEUP" || s === "AEDN"){ cb.disabled = !seriesEn.length; if(cb.disabled) cb.checked = false; }
     else if(s !== "DA"){ cb.disabled = !encheres.includes(s); if(cb.disabled) cb.checked = false; }
   }
   note.textContent = (!unique ? "Enchères intraday : sélectionner un jour unique. " : (encheres.length ? "Enchères déposées : " + encheres.join(", ") + ". " : "Aucune enchère intraday déposée pour ce jour. "))
     + (seriesEn.length ? "Activations aFRR : prix publiés par RTE, à la baisse le fournisseur paie si le prix est positif." : "Activations aFRR : pas encore publiées pour cette sélection.")
     + (seriesPrev.length && !prevPresente("conso") ? " Conso prévue et charge résiduelle : pas de prévision de consommation (application RTE non abonnée à l'API Consumption)." : "")
-    + (seriesPrev.length && !prevPresente("sol") ? " Solaire et éolien J-1 : publiés vers 16h en J-1." : "");
+    + (seriesPrev.length && !prevPresente("sol") ? " Solaire et éolien J-1 : publiés vers 16h en J-1." : "")
+    + (seriesEc.length ? " PRE : prix de règlement des écarts publiés par RTE, révisés pendant quelques jours." : " PRE : pas encore collecté pour cette sélection.");
   const series = [], vols = [];
   for(const j of jours){ const pts = await lire(`data/da/${j}.json`); if(pts) series.push(pts.map(p => ({cle: cleQuart(p.debut), prix: Number(p.prix), volume: Number(p.volume_mw) || 0}))); }
   if(!series.length){ vide.hidden = false; vide.textContent = "Aucune donnée day-ahead pour la sélection."; return; }
@@ -567,10 +573,17 @@ async function chargerDA(){
     datasets.push({label:"aFRR énergie hausse, prix moyen pondéré", serie:"AEUP", data: labels.map(l => parCle.has(l) && parCle.get(l).up !== undefined ? parCle.get(l).up : null), borderColor:couleur("--hausse"), borderWidth:1.5, pointRadius:0, stepped:true, hidden: !cbU.checked});
     datasets.push({label:"aFRR énergie baisse, prix moyen pondéré", serie:"AEDN", data: labels.map(l => parCle.has(l) && parCle.get(l).dn !== undefined ? parCle.get(l).dn : null), borderColor:couleur("--baisse"), borderWidth:1.5, pointRadius:0, stepped:true, hidden: !cbD.checked});
   }
+  if(seriesEc.length){
+    const mEc = moyenneParQuart(seriesEc), parCle = new Map(mEc.map(p => [p.cle, p]));
+    for(const [serie, champ, label, col] of [["PREP","prep","Prix de règlement des écarts positifs (€/MWh)","#4ade80"],["PREN","pren","Prix de règlement des écarts négatifs (€/MWh)","#fb7185"]]){
+      const cb = document.querySelector(`#ida-cases input[data-serie="${serie}"]`);
+      datasets.push({label, serie, data: labels.map(l => parCle.has(l) && parCle.get(l)[champ] !== undefined ? parCle.get(l)[champ] : null), borderColor: col, borderWidth:1.2, borderDash:[5,2], pointRadius:0, stepped:true, hidden: !(cb && cb.checked)});
+    }
+  }
   let axeMW = false;
   if(seriesPrev.length){
     const mP = moyenneParQuart(seriesPrev), parCle = new Map(mP.map(p => [p.cle, p]));
-    const def = [["RESID","resid","Charge résiduelle prévue J-1 (MW)","#f97316"],["CONSO","conso","Consommation prévue J-1 (MW)","#c9d1d9"],["SOL","sol","Solaire prévu J-1 (MW)","#eab308"],["EOL","eol","Éolien prévu J-1 (MW)","#38bdf8"],["OA","oa","Production OA prévue J-2 (MW)","#4ade80"]];
+    const def = [["RESID","resid","Charge résiduelle prévue J-1 (MW)","#f97316"],["CONSO","conso","Consommation prévue J-1 (MW)","#c9d1d9"],["SOL","sol","Solaire prévu J-1 (MW)","#eab308"],["EOL","eol","Éolien prévu J-1 (MW)","#38bdf8"]];
     for(const [serie, champ, label, col] of def){
       const cb = document.querySelector(`#ida-cases input[data-serie="${serie}"]`);
       datasets.push({label, serie, unite:"MW", data: labels.map(l => parCle.has(l) && parCle.get(l)[champ] !== undefined ? parCle.get(l)[champ] : null), borderColor: col, borderWidth:1.2, pointRadius:0, yAxisID:"yMW", hidden: !(cb && cb.checked)});
@@ -1166,26 +1179,27 @@ async function exporterQuarts(){
   const cle = cleScenario(), t = iso => new Date(iso).getTime();
   const tete = ["jour", "debut", "heure_paris", "prix_da_eur_mwh", "afrr_cap_hausse_eur_mw_h", "afrr_cap_baisse_eur_mw_h", "afrr_besoin_hausse_mw", "afrr_besoin_baisse_mw",
     "afrr_active_hausse_mw", "afrr_active_baisse_mw", "afrr_prix_hausse_eur_mwh", "afrr_prix_baisse_eur_mwh", "conso_prevue_j1_mw", "solaire_prevu_j1_mw", "eolien_prevu_j1_mw",
-    "charge_residuelle_prevue_j1_mw", "production_oa_prevue_j2_mw"];
+    "charge_residuelle_prevue_j1_mw", "pre_positif_eur_mwh", "pre_negatif_eur_mwh", "desequilibre_systeme_mw", "tendance_systeme"];
   if(strat) tete.push(...["soutirage_kw", "injection_kw", "reserve_hausse_kw", "reserve_baisse_kw", "soc_kwh", "activation_hausse_kw", "activation_baisse_kw"].map(c => `${strat}_${c}`));
   const lignes = [tete];
   for(const j of jours){
-    const [da, cap, en, pv, r, dec] = await Promise.all([lire(`data/da/${j}.json`), lire(`data/afrr_capacite/${j}.json`), lire(`data/afrr_energie/${j}.json`),
-      lire(`data/previsions/${j}.json`), lire(`data/resultats/${j}.json`), lire(`data/agent/decisions/${j}.json`)]);
+    const [da, cap, en, pv, r, dec, ec] = await Promise.all([lire(`data/da/${j}.json`), lire(`data/afrr_capacite/${j}.json`), lire(`data/afrr_energie/${j}.json`),
+      lire(`data/previsions/${j}.json`), lire(`data/resultats/${j}.json`), lire(`data/agent/decisions/${j}.json`), lire(`data/ecarts/${j}.json`)]);
     if(!da) continue;
     const mCap = new Map();
     for(const p of capJournalier(cap)){ const k = t(p.debut), o = mCap.get(k) || {}, v = Number(p.prix_eur_mw_15min ?? p.prix_eur_mw_h); if(estHausse(p.sens)) o.up = v; else if(estBaisse(p.sens)) o.dn = v; mCap.set(k, o); }
-    const mEn = new Map((en || []).map(p => [t(p.debut), p])), mPv = new Map((pv || []).map(p => [t(p.debut), p]));
+    const mEn = new Map((en || []).map(p => [t(p.debut), p])), mPv = new Map((pv || []).map(p => [t(p.debut), p])), mEc = new Map((ec || []).map(p => [t(p.debut), p]));
     let plan = null, xp = null;
     if(strat === "agent"){ plan = dec && dec.plan; xp = dec && dec.ex_post; }
     else if(strat){ const sc = r && r.scenarios ? (r.scenarios[cle] || r.scenarios.BT) : null, o = sc && sc[strat]; plan = o && !o.erreur ? o.plan : null; xp = sc && sc.ex_post && sc.ex_post[strat]; }
     const mPlan = new Map((plan || []).map((p, i) => [t(p.debut), {p, i}])), vus = new Set();
     for(const d of [...da].sort((a, b) => t(a.debut) - t(b.debut))){
       const k = t(d.debut); if(vus.has(k)) continue; vus.add(k);
-      const c = mCap.get(k) || {}, e = mEn.get(k) || {}, v = mPv.get(k) || {}, q = mPlan.get(k);
+      const c = mCap.get(k) || {}, e = mEn.get(k) || {}, v = mPv.get(k) || {}, q = mPlan.get(k), x = mEc.get(k) || {};
       const l = [j, d.debut, heureParis(d.debut), csvNombre(d.prix), csvNombre(c.up), csvNombre(c.dn), csvNombre(e.besoin_hausse_mw), csvNombre(e.besoin_baisse_mw),
         csvNombre(e.active_hausse_mw), csvNombre(e.active_baisse_mw), csvNombre(e.prix_hausse_eur_mwh), csvNombre(e.prix_baisse_eur_mwh), csvNombre(v.consommation_mw),
-        csvNombre(v.solaire_mw), csvNombre(v.eolien_mw), csvNombre(v.charge_residuelle_mw), csvNombre(v.oa_j2_mw)];
+        csvNombre(v.solaire_mw), csvNombre(v.eolien_mw), csvNombre(v.charge_residuelle_mw),
+        csvNombre(x.pre_positif_eur_mwh), csvNombre(x.pre_negatif_eur_mwh), csvNombre(x.desequilibre_mw), csvTexte(x.tendance)];
       if(strat) l.push(...(q ? [q.p.soutirage_kw, q.p.injection_kw, q.p.reserve_hausse_kw, q.p.reserve_baisse_kw, q.p.soc_kwh,
         xp && xp.active_hausse_kw ? xp.active_hausse_kw[q.i] : null, xp && xp.active_baisse_kw ? xp.active_baisse_kw[q.i] : null] : Array(7).fill(null)).map(csvNombre));
       lignes.push(l);

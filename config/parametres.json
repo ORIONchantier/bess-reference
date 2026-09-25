@@ -237,6 +237,12 @@
     "horaires_publication": "Guide Generation Forecast §4.1.1.1 : solaire et éolien J-1 à appeler vers 17h, échéance réglementaire 18h ; « courante » mise à jour vers 9h30 et 19h30. La J-1 n'existe donc pas à 9h en J-1. J-2 n'est décrite que pour l'agrégat OA et la MDSE (SOLAR + D-2 : erreur 400 constatée le 21/09/2026, probablement F08). Entrée utilisable par l'agent : OA J-2 (historique possible). Voir constats.",
     "marges": "API à identifier (publiée sur la page équilibrage de services-rte) : non branchée"
   },
+  "ecarts": {
+    "chemin": "balancing_energy/v5/imbalance_data",
+    "source": "guide Balancing Energy v5.2.2 §3.4 et §5.2 : prix de règlement des écarts positifs et négatifs, déséquilibre et tendance du système, pas 15 min depuis le 01/01/2025 (30 min avant), 1 mois maximum par appel en JSON (RG_COM_E_03), révisé après coup (updated_date)",
+    "usage": "affichage des prix pour l'instant. Prochaine étape : valoriser au PRE l'énergie aFRR activée que la batterie n'aurait pas pu livrer, comme mesure du risque. Nos offres en énergie étant déposées assez haut à la hausse comme à la baisse, cette exposition doit rester rare : elle sera affichée à part, pas déduite des revenus.",
+    "convention_a_confirmer": "écart positif = injection supérieure au programme, réglé au PRE positif ; écart négatif = injection inférieure, réglé au PRE négatif"
+  },
   "indisponibilites": {
     "chemin": "unavailability_additional_information/v7/generation_unavailabilities",
     "filieres": ["NUCLEAR"],

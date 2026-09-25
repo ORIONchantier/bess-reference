@@ -189,7 +189,11 @@ def main():
         else:
             print(f"indispo {demain} : déjà définitif (heure limite passée, lecture complète), rien à refaire")
     else:
-        du, au = dt.date.fromisoformat(args[0]), dt.date.fromisoformat(args[-1])
+        propre = lambda s: "".join(c for c in s.strip() if c.isdigit() or c == "-")     # formulaire du workflow : ponctuation tolérée
+        try:
+            du, au = dt.date.fromisoformat(propre(args[0])), dt.date.fromisoformat(propre(args[-1]))
+        except ValueError:
+            sys.exit(f"dates illisibles : « {args[0]} » et « {args[-1]} ». Format attendu AAAA-MM-JJ.")
         d = du
         while d <= au:
             f = min(au, (d.replace(day=1) + dt.timedelta(days=32)).replace(day=1) - dt.timedelta(days=1))

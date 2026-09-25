@@ -71,11 +71,22 @@ def entsoe_da(du: dt.date, au: dt.date, token: str) -> dict:
     return out
 
 
+def lire_date(txt: str) -> dt.date:
+    """Tolère les espaces et la ponctuation saisis dans le formulaire du workflow (« 2026-09-25. »)."""
+    propre = "".join(c for c in txt.strip() if c.isdigit() or c == "-")
+    try:
+        return dt.date.fromisoformat(propre)
+    except ValueError:
+        sys.exit(f"date illisible : « {txt} ». Format attendu AAAA-MM-JJ, par exemple 2026-01-01.")
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(args) != 2:
         sys.exit("usage : historique.py AAAA-MM-JJ AAAA-MM-JJ [--force] [--sans-da] [--sans-afrr]")
-    du, au = dt.date.fromisoformat(args[0]), dt.date.fromisoformat(args[1])
+    du, au = lire_date(args[0]), lire_date(args[1])
+    if du > au:
+        sys.exit(f"le premier jour ({du}) est postérieur au dernier ({au})")
     force = "--force" in sys.argv
     token = C.get_token()
 

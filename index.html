@@ -130,7 +130,7 @@
 <header>
   <img src="assets/logo-orion.png" alt="" onerror="this.style.display='none'">
   <h1>BESS - suivi de valorisation</h1>
-  <span class="sous"><span id="maj"></span> · page v2026-09-25.16</span>
+  <span class="sous"><span id="maj"></span> · page v2026-09-25.17</span>
   <a class="bouton" href="https://github.com/ORIONchantier/bess-reference/actions/workflows/collecte.yml" target="_blank" rel="noopener" title="Ouvre GitHub : cliquer sur Run workflow, puis revenir ici après une minute">▶ Collecter maintenant</a>
 </header>
 <main>
@@ -553,7 +553,9 @@ async function chargerDA(){
     + (seriesEn.length ? "Activations aFRR : prix publiés par RTE, à la baisse le fournisseur paie si le prix est positif." : "Activations aFRR : pas encore publiées pour cette sélection.")
     + (seriesPrev.length && !prevPresente("conso") ? " Conso prévue et charge résiduelle : pas de prévision de consommation (application RTE non abonnée à l'API Consumption)." : "")
     + (seriesPrev.length && !prevPresente("sol") ? " Solaire et éolien J-1 : publiés vers 16h en J-1." : "")
-    + (seriesEc.length ? " PRE : prix de règlement des écarts publiés par RTE, révisés pendant quelques jours." : " PRE : pas encore collecté pour cette sélection.");
+    + (seriesEc.length ? ` PRE : prix de règlement des écarts publiés par RTE, révisés pendant quelques jours (${seriesEc[0].length} pas sur cette journée).`
+       : ((idx.ecarts || []).length && jours[0] < idx.ecarts[0] ? ` PRE : historique des écarts non rattrapé, la collecte commence au ${fmtJour(idx.ecarts[0])} (workflow « Rattrapage historique »).`
+          : " PRE : pas encore publiés pour cette sélection."));
   const series = [], vols = [];
   for(const j of jours){ const pts = await lire(`data/da/${j}.json`); if(pts) series.push(pts.map(p => ({cle: cleQuart(p.debut), prix: Number(p.prix), volume: Number(p.volume_mw) || 0}))); }
   if(!series.length){ vide.hidden = false; vide.textContent = "Aucune donnée day-ahead pour la sélection."; return; }
@@ -1211,6 +1213,27 @@ async function exporterQuarts(){
 document.getElementById("csv-jours").addEventListener("click", () => exporterJours().catch(e => txt("csv-etat", "échec : " + e.message)));
 document.getElementById("csv-quarts").addEventListener("click", () => exporterQuarts().catch(e => txt("csv-etat", "échec : " + e.message)));
 
+// ----- suivi des collectes : la page se met à jour d'elle-même quand le robot a publié de nouvelles données
+function surveiller(){
+  const verifier = async () => {
+    if(document.hidden) return;                               // onglet en arrière-plan : on attend son retour
+    let neuf;
+    try{ neuf = await (await fetch("data/index.json", {cache:"no-store"})).json(); }catch(e){ return; }
+    if(!neuf.mis_a_jour || neuf.mis_a_jour === idx.mis_a_jour) return;
+    idx = neuf;
+    txt("maj", "dernière collecte " + idx.mis_a_jour.replace("T", " "));
+    joursDispo = idx.jours || []; idaDispo = idx.ida || {}; scenariosDispo = idx.scenarios || scenariosDispo;
+    cache.clear();                                            // les fichiers du jour en cours ont changé
+    const en = idx.afrr_energie || [];
+    if(en.length && ![...selEn.options].some(o => o.value === en[en.length-1])){
+      const o = document.createElement("option"); o.value = en[en.length-1]; o.textContent = fmtJour(en[en.length-1]); selEn.insertBefore(o, selEn.firstChild);
+    }
+    dessinerCal(); rafraichir();
+  };
+  setInterval(verifier, 120000);                              // toutes les 2 minutes
+  document.addEventListener("visibilitychange", () => { if(!document.hidden) verifier(); });
+}
+
 function rafraichir(){
   const j = joursSelection();
   txt("sel-resume", !j.length ? "Aucun jour sélectionné" : j.length === 1 ? `Journée ${fmtJour(j[0])}` : `Du ${fmtJour(j[0])} au ${fmtJour(j[j.length-1])}, ${j.length} jours`);
@@ -1246,6 +1269,7 @@ function rafraichir(){
     for(const j of [...en].reverse()){ const o=document.createElement("option"); o.value=j; o.textContent=fmtJour(j); selEn.appendChild(o); }
     if(en.length){ selEn.value = en[en.length-1]; chargerEnergie(selEn.value); }
     else { const v=document.getElementById("vide-energie"); v.hidden=false; v.textContent="Aucune journée d'activation collectée pour l'instant."; }
+    surveiller();
   }catch(e){
     const v=document.getElementById("vide-da"); v.hidden=false; v.textContent="Le fichier data/index.json est introuvable.";
   }
